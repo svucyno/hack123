@@ -1,187 +1,241 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="surface-panel reveal dashboard-shell dashboard-shell-farmer rounded-[1.8rem] px-5 py-6 sm:px-7 sm:py-8">
-  <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between dashboard-shell-head">
-    <div>
-      <span class="section-kicker"><i class="fa-solid fa-tractor"></i> Farmer workspace</span>
-      <h1 class="mt-4 font-display text-3xl font-bold text-soil sm:text-[2.7rem]">Run your harvest operation</h1>
-      <p class="mt-3 max-w-2xl text-sm leading-6 text-ink/70">Track live inventory, spot weak listings, and act on farmer-side tasks from one control room.</p>
+<section class="surface-panel reveal farmer-ops-shell overflow-hidden rounded-[1.8rem] px-5 py-6 sm:px-7 sm:py-8">
+    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+            <span class="section-kicker">
+                <i class="fa-solid fa-tractor"></i>
+                {{ t('farmer.dashboard.kicker', 'Farmer operations cockpit') }}
+            </span>
+            <h1 class="mt-4 font-display text-3xl font-bold text-soil sm:text-[2.7rem]">{{ t('farmer.dashboard.title', 'Track listings, harvests, and order momentum') }}</h1>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-ink/70">{{ t('farmer.dashboard.description', 'Use one workspace to monitor crop readiness, review delivery commitments, and keep your storefront healthy through the week.') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+            {% if is_verified %}
+            <span class="badge-app badge-success"><i class="fa-solid fa-badge-check"></i> {{ t('farmer.verified_partner', 'Verified partner') }}</span>
+            {% else %}
+            <span class="badge-app badge-warning"><i class="fa-regular fa-clock"></i> {{ t('farmer.verification_pending', 'Verification pending') }}</span>
+            {% endif %}
+            <span class="badge-app badge-neutral"><i class="fa-solid fa-star"></i> {{ metrics_snapshot.avg_rating }} avg rating</span>
+        </div>
     </div>
-    <div class="flex flex-wrap gap-3">
-      {% if is_verified %}
-      <span class="badge-app badge-success"><i class="fa-solid fa-badge-check"></i> Verified partner</span>
-      {% else %}
-      <span class="badge-app badge-warning"><i class="fa-regular fa-clock"></i> Verification pending</span>
-      {% endif %}
-      <a href="{{ url_for('add_crop') }}" class="btn-primary-app"><i class="fa-solid fa-plus"></i> Add listing</a>
-    </div>
-  </div>
 
-  <div class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4 dashboard-shell-metrics">
-    <div class="metric-card"><p class="metric-label">Active listings</p><p class="metric-value">{{ crops|length }}</p></div>
-    <div class="metric-card"><p class="metric-label">Open orders</p><p class="metric-value">{{ orders|length }}</p></div>
-    <div class="metric-card"><p class="metric-label">Inventory</p><p class="metric-value">{{ crop_stats.totalInventory }}</p><p class="mt-2 text-sm text-ink/62">kg live across listings</p></div>
-    <div class="metric-card"><p class="metric-label">Estimated value</p><p class="metric-value">₹{{ crop_stats.estimatedValue }}</p><p class="mt-2 text-sm text-ink/62">Current inventory value</p></div>
-  </div>
-
-  <div class="mt-7 grid gap-3 lg:grid-cols-3">
-    {% for item in listing_highlights %}
-    <div class="farmer-highlight-card tone-{{ item.tone }}">
-      <div class="farmer-highlight-value">{{ item.value }}</div>
-      <div>
-        <p class="farmer-highlight-title">{{ item.title }}</p>
-        <p class="farmer-highlight-copy">{{ item.description }}</p>
-      </div>
+    <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {% for card in dashboard_cards %}
+        <article class="metric-card metric-card-{{ card.tone }} reveal">
+            <p class="metric-label">{{ card.label }}</p>
+            <p class="metric-value">{{ card.value }}</p>
+            <p class="mt-2 text-sm text-ink/62">{{ card.hint }}</p>
+        </article>
+        {% endfor %}
     </div>
-    {% endfor %}
-  </div>
+
+    <div class="mt-6 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <form method="GET" action="{{ url_for('farmer_dashboard') }}" class="surface-card farmer-filter-card p-4 sm:p-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="metric-label">Dashboard filters</p>
+                    <h2 class="mt-1 font-display text-xl font-semibold text-soil">Control your view</h2>
+                </div>
+                <button type="submit" class="btn-outline-app"><i class="fa-solid fa-sliders"></i> Apply filters</button>
+            </div>
+            <div class="mt-4 grid gap-4 lg:grid-cols-4">
+                <div>
+                    <label class="field-label" for="crop_query">Search listings</label>
+                    <input id="crop_query" name="crop_query" value="{{ filters.crop_query }}" class="input-shell" placeholder="Search crop, category, district">
+                </div>
+                <div>
+                    <label class="field-label" for="stock">Stock band</label>
+                    <select id="stock" name="stock" class="select-shell">
+                        <option value="all" {% if filters.stock == 'all' %}selected{% endif %}>All stock</option>
+                        <option value="high" {% if filters.stock == 'high' %}selected{% endif %}>High stock</option>
+                        <option value="balanced" {% if filters.stock == 'balanced' %}selected{% endif %}>Balanced</option>
+                        <option value="low" {% if filters.stock == 'low' %}selected{% endif %}>Low stock</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label" for="status">Order status</label>
+                    <select id="status" name="status" class="select-shell">
+                        <option value="all" {% if filters.status == 'all' %}selected{% endif %}>All orders</option>
+                        <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="confirmed" {% if filters.status == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                        <option value="packed" {% if filters.status == 'packed' %}selected{% endif %}>Packed</option>
+                        <option value="shipped" {% if filters.status == 'shipped' %}selected{% endif %}>Shipped</option>
+                        <option value="delivered" {% if filters.status == 'delivered' %}selected{% endif %}>Delivered</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label" for="sort">Sort listings</label>
+                    <select id="sort" name="sort" class="select-shell">
+                        <option value="value" {% if filters.sort == 'value' %}selected{% endif %}>By inventory value</option>
+                        <option value="stock" {% if filters.sort == 'stock' %}selected{% endif %}>By stock</option>
+                        <option value="harvest" {% if filters.sort == 'harvest' %}selected{% endif %}>By harvest date</option>
+                        <option value="name" {% if filters.sort == 'name' %}selected{% endif %}>Alphabetical</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+
+        <aside class="surface-card farmer-insight-card p-4 sm:p-5">
+            <p class="metric-label">Action queue</p>
+            <h2 class="mt-1 font-display text-xl font-semibold text-soil">Recommended next steps</h2>
+            <div class="mt-4 space-y-3">
+                {% for item in pending_actions %}
+                <a href="{{ item.href }}" class="action-row">
+                    <div>
+                        <p class="font-semibold text-soil">{{ item.title }}</p>
+                        <p class="text-sm text-ink/62">{{ item.count }} item{% if item.count != 1 %}s{% endif %} waiting</p>
+                    </div>
+                    <span class="badge-app badge-neutral">{{ item.count }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="mini-stat-card">
+                    <span class="metric-label">Fulfillment</span>
+                    <strong>{{ metrics_snapshot.fulfillment_rate }}%</strong>
+                </div>
+                <div class="mini-stat-card">
+                    <span class="metric-label">Repeat buyers</span>
+                    <strong>{{ metrics_snapshot.repeat_buyers }}</strong>
+                </div>
+                <div class="mini-stat-card">
+                    <span class="metric-label">Alerts</span>
+                    <strong>{{ smart_alerts|length }}</strong>
+                </div>
+            </div>
+        </aside>
+    </div>
 </section>
 
-<section class="mt-8 grid gap-8 xl:grid-cols-[1.05fr_0.95fr]">
-  <div class="space-y-6 reveal">
-    <div class="surface-card p-5 sm:p-6">
-      <div class="dashboard-section-head flex-wrap gap-4">
-        <div>
-          <span class="section-kicker"><i class="fa-solid fa-seedling"></i> Listings</span>
-          <h2 class="mt-3 font-display text-[1.9rem] font-bold text-soil">Manage crop listings</h2>
-        </div>
-        <span class="badge-app badge-muted">{{ filtered_count }} shown</span>
-      </div>
-
-      <form method="GET" action="{{ url_for('farmer_dashboard') }}" class="mt-5 farmer-toolbar grid gap-3 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
-        <input class="input-shell" type="search" name="q" value="{{ crop_filters.q }}" placeholder="Search crop, quality, location, tag">
-        <select class="select-shell" name="category">
-          <option value="all">All categories</option>
-          {% for category in form_options.categories %}
-          <option value="{{ category }}" {% if crop_filters.category == category %}selected{% endif %}>{{ category }}</option>
-          {% endfor %}
-        </select>
-        <select class="select-shell" name="stock">
-          <option value="all" {% if crop_filters.stock == 'all' %}selected{% endif %}>All stock states</option>
-          <option value="low" {% if crop_filters.stock == 'low' %}selected{% endif %}>Low stock</option>
-          <option value="ready" {% if crop_filters.stock == 'ready' %}selected{% endif %}>Ready to dispatch</option>
-          <option value="organic" {% if crop_filters.stock == 'organic' %}selected{% endif %}>Organic tagged</option>
-        </select>
-        <select class="select-shell" name="sort">
-          <option value="name_asc" {% if crop_filters.sort == 'name_asc' %}selected{% endif %}>Sort: Name</option>
-          <option value="price_desc" {% if crop_filters.sort == 'price_desc' %}selected{% endif %}>Sort: Price high-low</option>
-          <option value="price_asc" {% if crop_filters.sort == 'price_asc' %}selected{% endif %}>Sort: Price low-high</option>
-          <option value="quantity_desc" {% if crop_filters.sort == 'quantity_desc' %}selected{% endif %}>Sort: Stock high-low</option>
-          <option value="health_desc" {% if crop_filters.sort == 'health_desc' %}selected{% endif %}>Sort: Health score</option>
-        </select>
-      </form>
-
-      <div class="mt-6 farmer-crop-grid">
-        {% if filtered_crops %}
-          {% for crop in filtered_crops %}
-          <article class="farmer-crop-card" data-farmer-card>
-            <div class="farmer-crop-card__media">
-              {% if crop.image_url %}
-              <img src="{{ url_for('static', filename=crop.image_url) }}" alt="{{ crop.name }}" class="h-full w-full object-cover">
-              {% else %}
-              <div class="farmer-crop-card__placeholder"><i class="fa-solid fa-seedling"></i></div>
-              {% endif %}
-              <span class="farmer-stock-pill">{{ crop.stock_status }}</span>
+<section class="mt-8 grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
+    <div class="reveal">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <span class="section-kicker"><i class="fa-solid fa-seedling"></i> Live inventory</span>
+                <h2 class="mt-3 font-display text-[1.9rem] font-semibold text-soil">Listings that need attention</h2>
             </div>
-            <div class="farmer-crop-card__body">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h3 class="font-display text-xl font-bold text-soil">{{ crop.name }}</h3>
-                  <p class="mt-1 text-sm text-ink/60">{{ crop.category }} · {{ crop.quality }}</p>
+            <a href="{{ url_for('add_crop') }}" class="btn-primary-app"><i class="fa-solid fa-plus"></i> Add crop</a>
+        </div>
+
+        <div class="mt-6 grid gap-5 md:grid-cols-2">
+            {% for crop in filtered_crops %}
+            <article class="surface-card reveal crop-ops-card p-5">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.16em] text-ink/45">{{ crop.listing_code }}</p>
+                        <h3 class="mt-2 font-display text-[1.55rem] font-semibold text-soil">{{ crop.name }}</h3>
+                        <p class="mt-2 text-sm leading-6 text-ink/62">{{ crop.region }}</p>
+                    </div>
+                    <span class="badge-app badge-{{ crop.stock_health_tone }}">{{ crop.stock_health_label }}</span>
                 </div>
-                <span class="farmer-health-score">{{ crop.health_score }}/100</span>
-              </div>
-              <div class="mt-3 farmer-card-meta-grid">
-                <div><span>Stock</span><strong>{{ crop.quantity }} {{ crop.unit or 'kg' }}</strong></div>
-                <div><span>Price</span><strong>₹{{ crop.price }}</strong></div>
-                <div><span>Min order</span><strong>{{ crop.min_order_quantity or 1 }} {{ crop.unit or 'kg' }}</strong></div>
-                <div><span>Radius</span><strong>{{ crop.delivery_radius_km or 30 }} km</strong></div>
-              </div>
-              <div class="mt-4 progress-track"><span style="width: {{ crop.stock_progress }}%"></span></div>
-              <p class="mt-3 text-sm leading-6 text-ink/65">{{ crop.description or 'Add quality notes, freshness details, and fulfilment readiness to improve conversion.' }}</p>
-              <div class="mt-4 flex flex-wrap gap-2">
-                {% for tag in crop.tag_list %}
-                <span class="tag-chip">{{ tag }}</span>
+                <div class="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div class="mini-stat-card"><span class="metric-label">Quantity</span><strong>{{ crop.quantity }} kg</strong></div>
+                    <div class="mini-stat-card"><span class="metric-label">Price</span><strong>₹{{ crop.price }}/kg</strong></div>
+                    <div class="mini-stat-card"><span class="metric-label">Inventory value</span><strong>₹{{ "%.0f"|format(crop.inventory_value) }}</strong></div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2 text-sm">
+                    <span class="badge-app badge-neutral">{{ crop.category or 'General' }}</span>
+                    <span class="badge-app badge-neutral">{{ crop.quality_label }}</span>
+                    {% if crop.harvest_countdown or crop.harvest_countdown == 0 %}
+                    <span class="badge-app badge-neutral">Harvest in {{ crop.harvest_countdown }}d</span>
+                    {% endif %}
+                </div>
+                <div class="mt-5 flex flex-wrap gap-3">
+                    <a class="btn-outline-app" href="/farmer/edit_crop/{{ crop._id or crop.id }}"><i class="fa-solid fa-pen"></i> Edit</a>
+                    <form method="POST" action="/farmer/delete_crop/{{ crop._id or crop.id }}" onsubmit="return confirm('Delete this crop listing?');">
+                        <button class="btn-danger-app" type="submit"><i class="fa-solid fa-trash"></i> Remove</button>
+                    </form>
+                </div>
+            </article>
+            {% else %}
+            <div class="empty-state md:col-span-2">
+                <h3 class="font-display text-[2rem] font-semibold text-soil">No listings match this view</h3>
+                <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-ink/65 sm:text-base">Try clearing filters or add a new crop to refresh the dashboard.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <aside class="reveal space-y-6">
+        <div class="surface-card p-5">
+            <span class="section-kicker"><i class="fa-solid fa-calendar-days"></i> Harvest forecast</span>
+            <h2 class="mt-3 font-display text-[1.7rem] font-semibold text-soil">Upcoming harvest windows</h2>
+            <div class="mt-5 space-y-3">
+                {% for item in harvest_forecast %}
+                <div class="timeline-row">
+                    <div>
+                        <p class="font-semibold text-soil">{{ item.name }}</p>
+                        <p class="text-sm text-ink/62">{{ item.region }} · {{ item.quantity }} kg</p>
+                    </div>
+                    <span class="badge-app badge-neutral">{{ item.in_days }}d</span>
+                </div>
+                {% else %}
+                <p class="text-sm text-ink/62">No harvest forecast data available.</p>
                 {% endfor %}
-              </div>
-              <div class="mt-5 flex flex-wrap gap-3">
-                <a href="{{ url_for('edit_crop', id=crop.id) }}" class="btn-outline-app"><i class="fa-solid fa-pen"></i> Edit</a>
-                <a href="{{ url_for('delete_crop', id=crop.id) }}" class="btn-danger-app"><i class="fa-solid fa-trash"></i> Delete</a>
-              </div>
             </div>
-          </article>
-          {% endfor %}
-        {% else %}
-        <div class="empty-state-card">
-          <i class="fa-solid fa-box-open"></i>
-          <h3>No listings matched these filters</h3>
-          <p>Adjust your search, change the stock filter, or create a new listing.</p>
-          <a href="{{ url_for('add_crop') }}" class="btn-primary-app"><i class="fa-solid fa-plus"></i> Create listing</a>
         </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
 
-  <div class="space-y-6 reveal">
-    <div class="surface-card p-5 sm:p-6">
-      <div class="dashboard-section-head">
-        <div>
-          <span class="section-kicker"><i class="fa-solid fa-receipt"></i> Open orders</span>
-          <h2 class="mt-3 font-display text-[1.7rem] font-bold text-soil">Dispatch queue</h2>
+        <div class="surface-card p-5">
+            <span class="section-kicker"><i class="fa-solid fa-map-location-dot"></i> Region mix</span>
+            <h2 class="mt-3 font-display text-[1.7rem] font-semibold text-soil">Listing concentration</h2>
+            <div class="mt-5 space-y-3">
+                {% for row in district_breakdown %}
+                <div class="progress-row">
+                    <div class="flex items-center justify-between gap-3 text-sm font-semibold text-soil">
+                        <span>{{ row.name }}</span>
+                        <span>{{ row.count }}</span>
+                    </div>
+                    <div class="progress-track"><span style="width: {{ "%.0f"|format((row.count / (filtered_crops|length or 1)) * 100) }}%"></span></div>
+                </div>
+                {% else %}
+                <p class="text-sm text-ink/62">Region insights will appear once listings are available.</p>
+                {% endfor %}
+            </div>
         </div>
-      </div>
-      <div class="mt-5 space-y-4">
-        {% if orders %}
-          {% for order in orders %}
-          <div class="order-queue-card">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <h3 class="font-semibold text-soil">{{ order.crop_name or order.name or 'Order' }}</h3>
-                <p class="mt-1 text-sm text-ink/60">{{ order.buyer_name or order.customer_name or 'Buyer' }} · {{ order.location or 'Location pending' }}</p>
-              </div>
-              <span class="badge-app badge-muted">{{ t_status(order.status or 'pending') }}</span>
-            </div>
-            <div class="mt-4 flex flex-wrap gap-3 text-sm text-ink/65">
-              <span><strong>Qty:</strong> {{ order.quantity or 0 }}</span>
-              <span><strong>Total:</strong> ₹{{ order.total_price or 0 }}</span>
-              <span><strong>Tracking:</strong> {{ order.tracking_code or 'Not added' }}</span>
-            </div>
-          </div>
-          {% endfor %}
-        {% else %}
-          <div class="empty-mini-state">
-            <i class="fa-regular fa-calendar-check"></i>
-            <span>No open orders right now.</span>
-          </div>
-        {% endif %}
-      </div>
-    </div>
+    </aside>
+</section>
 
-    <div class="surface-card p-5 sm:p-6">
-      <div class="dashboard-section-head">
+<section class="mt-8 reveal">
+    <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <span class="section-kicker"><i class="fa-solid fa-wand-magic-sparkles"></i> Smart alerts</span>
-          <h2 class="mt-3 font-display text-[1.7rem] font-bold text-soil">Actions worth taking</h2>
+            <span class="section-kicker"><i class="fa-solid fa-truck-fast"></i> Order board</span>
+            <h2 class="mt-3 font-display text-[1.9rem] font-semibold text-soil">Fulfillment by stage</h2>
         </div>
-      </div>
-      <div class="mt-5 space-y-3">
-        {% if smart_alerts %}
-          {% for alert in smart_alerts %}
-          <div class="smart-alert-card">
-            <strong>{{ alert.title or alert.name or 'Farmer alert' }}</strong>
-            <p>{{ alert.message or alert.description or 'Review this recommendation in the smart hub.' }}</p>
-          </div>
-          {% endfor %}
-        {% else %}
-          <div class="empty-mini-state">
-            <i class="fa-solid fa-circle-check"></i>
-            <span>No smart alerts for now.</span>
-          </div>
-        {% endif %}
-      </div>
     </div>
-  </div>
+    <div class="mt-6 grid gap-5 xl:grid-cols-5">
+        {% for column in order_board %}
+        <section class="surface-card order-board-column p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <p class="font-semibold text-soil">{{ column.label }}</p>
+                    <p class="text-xs uppercase tracking-[0.14em] text-ink/45">₹{{ column.total_value|round }}</p>
+                </div>
+                <span class="badge-app badge-neutral">{{ column.count }}</span>
+            </div>
+            <div class="mt-4 space-y-3">
+                {% for order in column.orders %}
+                <article class="order-tile">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="font-semibold text-soil">{{ order.crop_name or 'Order' }}</p>
+                            <p class="text-sm text-ink/62">{{ order.customer_name or 'Customer' }}</p>
+                        </div>
+                        <span class="badge-app badge-neutral">{{ order.fulfillment_label }}</span>
+                    </div>
+                    <p class="mt-2 text-sm text-ink/62">{{ order.route_label }}</p>
+                    <div class="mt-3 flex items-center justify-between gap-3 text-sm font-semibold text-soil">
+                        <span>{{ order.quantity }} kg</span>
+                        <span>₹{{ "%.0f"|format(order.total_price) }}</span>
+                    </div>
+                </article>
+                {% else %}
+                <p class="text-sm text-ink/55">No orders in this stage.</p>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
 </section>
 {% endblock %}

@@ -1216,105 +1216,36 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
         revealItems.forEach((item) => item.classList.add("is-visible"));
     }
-});
 
-document.addEventListener("DOMContentLoaded", () => {
-  const farmerForms = document.querySelectorAll("[data-farmer-crop-form]");
-  const categoryHints = {
-    "Vegetables": "Fresh vegetables usually convert better with smaller MOQs and same-day availability.",
-    "Fruits": "Mention ripeness, packaging, and delivery radius for fruit buyers.",
-    "Grains": "Bulk grain buyers look for moisture, storage notes, and larger minimum order quantities.",
-    "Rice Varieties": "Add grade, harvest season, and milling quality for rice listings.",
-    "Pulses": "Pulse buyers value cleaning quality, packaging, and consistent batch sizing.",
-    "Spices": "Spice listings perform better with aroma, source, and dryness notes.",
-    "Organic Products": "Organic listings should connect proof, farm practices, and premium context.",
-  };
 
-  const wirePreview = (inputId, imageId, labelId, shellId) => {
-    const input = document.getElementById(inputId);
-    const image = document.getElementById(imageId);
-    const label = document.getElementById(labelId);
-    const shell = document.getElementById(shellId);
-    if (!input || !image || !label || !shell) return;
+    const farmerFilterForm = document.querySelector('.farmer-filter-card form, .farmer-filter-card');
+    if (document.body.classList.contains('endpoint-farmer_dashboard') && farmerFilterForm) {
+        const dashboardSelects = farmerFilterForm.querySelectorAll('select');
+        dashboardSelects.forEach((select) => {
+            select.addEventListener('change', () => {
+                if (typeof farmerFilterForm.requestSubmit === 'function') {
+                    farmerFilterForm.requestSubmit();
+                }
+            });
+        });
 
-    input.addEventListener("change", () => {
-      const file = input.files && input.files[0];
-      if (!file) {
-        image.classList.add("hidden");
-        image.removeAttribute("src");
-        label.textContent = "";
-        if (!shell.querySelector("img:not(.hidden)")) {
-          shell.classList.add("hidden");
+        const cropQueryInput = farmerFilterForm.querySelector('input[name="crop_query"]');
+        if (cropQueryInput) {
+            cropQueryInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && typeof farmerFilterForm.requestSubmit === 'function') {
+                    event.preventDefault();
+                    farmerFilterForm.requestSubmit();
+                }
+            });
         }
-        return;
-      }
-      image.src = URL.createObjectURL(file);
-      image.classList.remove("hidden");
-      label.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
-      shell.classList.remove("hidden");
-    });
-  };
+    }
 
-  wirePreview("crop_image", "listing-image-preview", "listing-image-label", "listing-image-preview-shell");
-  wirePreview("quality_proof", "listing-proof-preview", "listing-proof-label", "listing-image-preview-shell");
-  wirePreview("edit-crop-image", "edit-image-preview", "edit-image-label", "edit-preview-shell");
-  wirePreview("edit-quality-proof", "edit-proof-preview", "edit-proof-label", "edit-preview-shell");
+    if (document.body.classList.contains('endpoint-farmer_profile')) {
+        const reviewCards = document.querySelectorAll('.review-quote-card');
+        reviewCards.forEach((card, index) => {
+            card.style.transitionDelay = `${Math.min(index * 55, 220)}ms`;
+            card.classList.add('reveal');
+        });
+    }
 
-  const hintTarget = document.getElementById("price_suggestion");
-  const categorySelect = document.querySelector("[data-price-hint-source]");
-  if (hintTarget && categorySelect) {
-    const refreshHint = () => {
-      hintTarget.textContent = categoryHints[categorySelect.value] || "Use clear pricing, recent harvest details, and proof photos to improve buyer confidence.";
-    };
-    categorySelect.addEventListener("change", refreshHint);
-    refreshHint();
-  }
-
-  farmerForms.forEach((form) => {
-    const quantityField = form.querySelector('input[name="quantity"]');
-    const priceField = form.querySelector('input[name="price"]');
-    const moqField = form.querySelector('input[name="min_order_quantity"]');
-    const unitField = form.querySelector('input[name="unit"]');
-    const estimatedValueTarget = form.querySelector("[data-estimated-value]");
-    const suggestedMoqTarget = form.querySelector("[data-suggested-moq]");
-
-    const recalc = () => {
-      const quantity = Number(quantityField && quantityField.value ? quantityField.value : 0);
-      const price = Number(priceField && priceField.value ? priceField.value : 0);
-      const estimated = Math.round(quantity * price);
-      if (estimatedValueTarget) {
-        estimatedValueTarget.textContent = `₹${estimated.toLocaleString()}`;
-      }
-      if (suggestedMoqTarget) {
-        const suggested = quantity >= 250 ? 25 : quantity >= 100 ? 10 : quantity >= 25 ? 5 : 1;
-        suggestedMoqTarget.textContent = String(moqField && moqField.value ? moqField.value : suggested);
-      }
-      if (unitField && suggestedMoqTarget && suggestedMoqTarget.nextSibling && suggestedMoqTarget.nextSibling.nodeType === Node.TEXT_NODE) {
-        suggestedMoqTarget.nextSibling.textContent = ` ${unitField.value || "kg"}`;
-      }
-    };
-
-    [quantityField, priceField, moqField, unitField].forEach((field) => {
-      if (field) field.addEventListener("input", recalc);
-    });
-    recalc();
-
-    form.addEventListener("submit", (event) => {
-      const errors = [];
-      const name = form.querySelector('input[name="name"]');
-      const district = form.querySelector('input[name="district"]');
-      const village = form.querySelector('input[name="village"]');
-      const pincode = form.querySelector('input[name="pincode"]');
-      const description = form.querySelector('textarea[name="description"]');
-      if (name && name.value.trim().length < 3) errors.push("Product name should be at least 3 characters.");
-      if (district && district.value.trim().length < 2) errors.push("District is required.");
-      if (village && village.value.trim().length < 2) errors.push("Village is required.");
-      if (pincode && !/^\d{6}$/.test(pincode.value.trim())) errors.push("Pincode must be 6 digits.");
-      if (description && description.value.trim().length > 900) errors.push("Description must stay under 900 characters.");
-      if (errors.length) {
-        event.preventDefault();
-        window.alert(errors[0]);
-      }
-    });
-  });
 });
