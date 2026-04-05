@@ -18,6 +18,74 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+function asString(value: unknown, fallback = ""): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  return String(value);
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function asBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return ["1", "true", "yes", "on"].includes(asString(value).trim().toLowerCase());
+}
+
+function normalizeSortOptions(value: unknown): Array<{ value: string; label: string }> {
+  const options = Array.isArray(value) ? value : [];
+  return options
+    .map((option) => {
+      const record = asRecord(option);
+      return {
+        value: asString(record.value, "newest"),
+        label: asString(record.label, asString(record.value, "Newest")),
+      };
+    })
+    .filter((option) => option.value);
+}
+
+function normalizeMarketplaceCrop(value: unknown): Record<string, unknown> {
+  const crop = asRecord(value);
+  const farmerName = asString(crop.farmer_name, "Farmer");
+  const tags = Array.isArray(crop.tags) ? crop.tags.map((tag) => asString(tag)).filter(Boolean) : [];
+
+  return {
+    ...crop,
+    id: asString(crop.id),
+    farmer_id: asString(crop.farmer_id),
+    name: asString(crop.name, "Untitled crop"),
+    category: asString(crop.category, "General"),
+    image_url: asString(crop.image_url),
+    village: asString(crop.village),
+    farmer_city: asString(crop.farmer_city),
+    district: asString(crop.district),
+    state: asString(crop.state),
+    price: asNumber(crop.price, 0),
+    unit: asString(crop.unit, "kg"),
+    stock_status: asString(crop.stock_status, "Available"),
+    quantity: asNumber(crop.quantity, 0),
+    delivery_eta: asString(crop.delivery_eta, "2-4 days"),
+    same_day_available: asBoolean(crop.same_day_available),
+    price_trend: asString(crop.price_trend, "Stable"),
+    demand_score: asNumber(crop.demand_score, 0),
+    min_order_quantity: asNumber(crop.min_order_quantity, 1),
+    is_verified: asBoolean(crop.is_verified),
+    organic: asBoolean(crop.organic),
+    farmer_name: farmerName,
+    farmer_initial: farmerName.trim().charAt(0).toUpperCase() || "F",
+    tags,
+  };
+}
+
 export async function marketplacePage(request: NextRequest): Promise<NextResponse> {
   const sessionOrResponse = requireSession(request);
   if (sessionOrResponse instanceof NextResponse) {
@@ -42,7 +110,7 @@ export async function marketplacePage(request: NextRequest): Promise<NextRespons
     request,
     "index.html",
     {
-      crops: asArray(data.crops),
+      crops: asArray(data.crops).map(normalizeMarketplaceCrop),
       query: request.nextUrl.searchParams.get("query") || "",
       state: request.nextUrl.searchParams.get("state") || "",
       district: request.nextUrl.searchParams.get("district") || "",
@@ -51,10 +119,10 @@ export async function marketplacePage(request: NextRequest): Promise<NextRespons
       price_max: request.nextUrl.searchParams.get("price_max") || "",
       verified_only: request.nextUrl.searchParams.get("verified_only") === "true",
       sort: request.nextUrl.searchParams.get("sort") || "newest",
-      categories: asArray(data.categories),
-      states: asArray(data.states),
+      categories: asArray(data.categories).map((item) => asString(item)).filter(Boolean),
+      states: asArray(data.states).map((item) => asString(item)).filter(Boolean),
       stats: asRecord(data.stats),
-      sort_options: asArray(data.sort_options),
+      sort_options: normalizeSortOptions(data.sort_options),
       welcome_message: welcomeMessage,
     },
     "marketplace",

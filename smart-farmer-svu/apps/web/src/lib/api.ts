@@ -23,12 +23,28 @@ export async function apiFetch(
     body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    cache: "no-store",
-    ...options,
-    headers,
-    body: body as BodyInit | null | undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      cache: "no-store",
+      ...options,
+      headers,
+      body: body as BodyInit | null | undefined,
+    });
+  } catch {
+    const data: ApiPayload = {
+      success: false,
+      error_code: "api_unavailable",
+      message: "Backend API is unavailable. Start the API server on http://localhost:8000.",
+    };
+    response = new Response(JSON.stringify(data), {
+      status: 503,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+    return { response, data };
+  }
 
   let data: ApiPayload = {};
   const contentType = response.headers.get("content-type") || "";

@@ -4,18 +4,193 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
+import { resolveApiUrl } from "../config/runtime";
+
 type RootScreen = "splash" | "loading" | "auth" | "app";
 type AuthScreen = "login" | "verify" | "register" | "forgot" | "resetVerify" | "resetPassword";
 type AppScreen = "dashboard" | "marketplace" | "orders" | "profile";
+type LanguageCode = "en" | "te" | "hi" | "ta" | "kn" | "ml";
 type Purpose = "login" | "password_reset";
 type Challenge = { challengeId: string; email: string; purpose: Purpose; verified?: boolean };
 type User = { id: string; username: string; email: string; role: string; full_name: string; city: string; state: string; district: string; pincode: string; is_verified: boolean };
 type ApiResult = { ok: boolean; message: string; payload: Record<string, unknown> };
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+const API_URL = resolveApiUrl().replace(/\/$/, "");
 const colors = { bg: "#F7F5EE", card: "#FFFFFF", green: "#1F6A3A", dark: "#174F2D", soft: "#E7F3E6", text: "#1E271F", muted: "#6D776E", border: "#E3E9E0", red: "#E23F32", amber: "#C07E12" };
 const splashLightBackground = require("../../assets/splash-light.jpeg");
 const splashDarkBackground = require("../../assets/splash-dark.jpeg");
+const LANGUAGE_OPTIONS: Array<{ code: LanguageCode; label: string }> = [
+  { code: "en", label: "EN" },
+  { code: "te", label: "TE" },
+  { code: "hi", label: "HI" },
+  { code: "ta", label: "TA" },
+  { code: "kn", label: "KN" },
+  { code: "ml", label: "ML" },
+];
+const MOBILE_COPY: Record<LanguageCode, Record<string, string>> = {
+  en: {
+    brand_tagline: "Soil to table network",
+    auth_hero_title: "Smart Farmer Access",
+    auth_hero_body: "Mobile now follows the same login, OTP verify, register, and reset-password flow as the web app.",
+    language_label: "Language",
+    login_title: "Login",
+    verify_title: "Verify OTP",
+    register_title: "Register",
+    forgot_title: "Forgot Password",
+    reset_verify_title: "Verify Reset OTP",
+    reset_password_title: "Reset Password",
+    email: "Email",
+    password: "Password",
+    username: "Username",
+    full_name: "Full Name",
+    role: "Role",
+    city: "City",
+    state: "State",
+    district: "District",
+    pincode: "Pincode",
+    registered_email: "Registered Email",
+    otp: "OTP",
+    new_password: "New Password",
+    confirm_password: "Confirm Password",
+    continue_to_otp: "Continue to OTP",
+    verify_and_login: "Verify and Login",
+    resend_otp: "Resend OTP",
+    back_to_login: "Back to login",
+    create_account: "Create Account",
+    already_account: "Already have an account?",
+    forgot_password: "Forgot password?",
+    no_account: "Don't have an account?",
+    sign_up: "Sign Up",
+    login_link: "Login",
+    start_reset_flow: "Start Reset Flow",
+    confirm_otp: "Confirm OTP",
+    update_password: "Update Password",
+    customer: "Customer",
+    farmer: "Farmer",
+    placeholder_email: "name@example.com",
+    placeholder_password: "Enter password",
+    placeholder_otp: "6 digit code",
+    placeholder_username: "username",
+    placeholder_full_name: "Full name",
+    placeholder_password_min: "Minimum 8 characters",
+    placeholder_city: "City",
+    placeholder_state: "State",
+    placeholder_district: "District",
+    placeholder_pincode: "Pincode",
+    placeholder_new_password: "New password",
+    placeholder_confirm_password: "Confirm password",
+  },
+  te: {
+    brand_tagline: "పొలం నుంచి భోజన పట్టిక వరకు",
+    auth_hero_title: "స్మార్ట్ ఫార్మర్ ప్రవేశం",
+    auth_hero_body: "మొబైల్ యాప్ ఇప్పుడు వెబ్ యాప్‌లాగే లాగిన్, OTP నిర్ధారణ, రిజిస్టర్ మరియు పాస్‌వర్డ్ రీసెట్ ప్రవాహాన్ని అనుసరిస్తుంది.",
+    language_label: "భాష",
+    login_title: "లాగిన్",
+    verify_title: "OTP నిర్ధారించండి",
+    register_title: "నమోదు",
+    forgot_title: "పాస్‌వర్డ్ మర్చిపోయారా",
+    reset_verify_title: "రీసెట్ OTP నిర్ధారించండి",
+    reset_password_title: "పాస్‌వర్డ్ రీసెట్ చేయండి",
+    email: "ఇమెయిల్",
+    password: "పాస్‌వర్డ్",
+    username: "యూజర్ పేరు",
+    full_name: "పూర్తి పేరు",
+    role: "పాత్ర",
+    city: "నగరం",
+    state: "రాష్ట్రం",
+    district: "జిల్లా",
+    pincode: "పిన్ కోడ్",
+    registered_email: "నమోదైన ఇమెయిల్",
+    otp: "OTP",
+    new_password: "కొత్త పాస్‌వర్డ్",
+    confirm_password: "పాస్‌వర్డ్ నిర్ధారించండి",
+    continue_to_otp: "OTPకి కొనసాగండి",
+    verify_and_login: "నిర్ధారించి లాగిన్ అవ్వండి",
+    resend_otp: "OTP మళ్లీ పంపండి",
+    back_to_login: "లాగిన్‌కి తిరిగి వెళ్ళండి",
+    create_account: "ఖాతా సృష్టించండి",
+    already_account: "ఇప్పటికే ఖాతా ఉందా?",
+    forgot_password: "పాస్‌వర్డ్ మర్చిపోయారా?",
+    no_account: "ఖాతా లేదా?",
+    sign_up: "సైన్ అప్",
+    login_link: "లాగిన్",
+    start_reset_flow: "రీసెట్ ప్రక్రియ ప్రారంభించండి",
+    confirm_otp: "OTP నిర్ధారించండి",
+    update_password: "పాస్‌వర్డ్ నవీకరించండి",
+    customer: "కస్టమర్",
+    farmer: "రైతు",
+    placeholder_email: "name@example.com",
+    placeholder_password: "పాస్‌వర్డ్ నమోదు చేయండి",
+    placeholder_otp: "6 అంకెల కోడ్",
+    placeholder_username: "username",
+    placeholder_full_name: "పూర్తి పేరు",
+    placeholder_password_min: "కనీసం 8 అక్షరాలు",
+    placeholder_city: "నగరం",
+    placeholder_state: "రాష్ట్రం",
+    placeholder_district: "జిల్లా",
+    placeholder_pincode: "పిన్ కోడ్",
+    placeholder_new_password: "కొత్త పాస్‌వర్డ్",
+    placeholder_confirm_password: "పాస్‌వర్డ్ మళ్లీ నమోదు చేయండి",
+  },
+  hi: {
+    brand_tagline: "खेत से थाली तक नेटवर्क",
+    auth_hero_title: "स्मार्ट फार्मर एक्सेस",
+    auth_hero_body: "मोबाइल अब वेब ऐप की तरह लॉगिन, OTP सत्यापन, रजिस्टर और पासवर्ड रीसेट फ्लो का पालन करता है।",
+    language_label: "भाषा",
+    login_title: "लॉगिन",
+    verify_title: "OTP सत्यापित करें",
+    register_title: "रजिस्टर",
+    forgot_title: "पासवर्ड भूल गए",
+    reset_verify_title: "रीसेट OTP सत्यापित करें",
+    reset_password_title: "पासवर्ड रीसेट करें",
+    email: "ईमेल",
+    password: "पासवर्ड",
+    username: "यूज़रनेम",
+    full_name: "पूरा नाम",
+    role: "भूमिका",
+    city: "शहर",
+    state: "राज्य",
+    district: "जिला",
+    pincode: "पिनकोड",
+    registered_email: "पंजीकृत ईमेल",
+    otp: "OTP",
+    new_password: "नया पासवर्ड",
+    confirm_password: "पासवर्ड की पुष्टि करें",
+    continue_to_otp: "OTP पर जारी रखें",
+    verify_and_login: "सत्यापित करें और लॉगिन करें",
+    resend_otp: "OTP फिर भेजें",
+    back_to_login: "लॉगिन पर वापस जाएं",
+    create_account: "खाता बनाएं",
+    already_account: "क्या आपके पास पहले से खाता है?",
+    forgot_password: "पासवर्ड भूल गए?",
+    no_account: "क्या आपके पास खाता नहीं है?",
+    sign_up: "साइन अप",
+    login_link: "लॉगिन",
+    start_reset_flow: "रीसेट फ्लो शुरू करें",
+    confirm_otp: "OTP की पुष्टि करें",
+    update_password: "पासवर्ड अपडेट करें",
+    customer: "ग्राहक",
+    farmer: "किसान",
+    placeholder_email: "name@example.com",
+    placeholder_password: "पासवर्ड दर्ज करें",
+    placeholder_otp: "6 अंकों का कोड",
+    placeholder_username: "username",
+    placeholder_full_name: "पूरा नाम",
+    placeholder_password_min: "कम से कम 8 अक्षर",
+    placeholder_city: "शहर",
+    placeholder_state: "राज्य",
+    placeholder_district: "जिला",
+    placeholder_pincode: "पिनकोड",
+    placeholder_new_password: "नया पासवर्ड",
+    placeholder_confirm_password: "पासवर्ड फिर दर्ज करें",
+  },
+  ta: {},
+  kn: {},
+  ml: {},
+};
+function t(language: LanguageCode, key: string): string {
+  return MOBILE_COPY[language][key] || MOBILE_COPY.en[key] || key;
+}
 const crops = [
   { id: "tomatoes", name: "Tomatoes", price: "Rs 45 / kg", priceValue: 45, unit: "kg", location: "Guntur", verified: true, organic: true },
   { id: "spinach", name: "Spinach", price: "Rs 32 / bunch", priceValue: 32, unit: "bunch", location: "Nellore", verified: false, organic: true },
@@ -25,6 +200,7 @@ const crops = [
 export default function App(): React.JSX.Element {
   const colorScheme = useColorScheme();
   const [root, setRoot] = useState<RootScreen>("splash");
+  const [language, setLanguage] = useState<LanguageCode>("en");
   const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
   const [appScreen, setAppScreen] = useState<AppScreen>("dashboard");
   const [user, setUser] = useState<User | null>(null);
@@ -196,7 +372,7 @@ export default function App(): React.JSX.Element {
         <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
         {root === "splash" ? <Splash darkMode={colorScheme === "dark"} /> : null}
         {root === "loading" ? <LoadingScreen darkMode={colorScheme === "dark"} /> : null}
-        {root === "auth" ? <AuthLayout authScreen={authScreen} busy={busy} error={error} forgot={forgot} login={login} notice={notice} register={register} resetPassword={resetPassword} resetVerify={resetVerify} setAuthScreen={(next) => { resetNotices(); setAuthScreen(next); }} setForgot={setForgot} setLogin={setLogin} setRegister={setRegister} setResetPassword={setResetPassword} setResetVerify={setResetVerify} setVerify={setVerify} setTestOtp={setTestOtp} submitForgot={submitForgot} submitLogin={submitLogin} submitRegister={submitRegister} submitResetPassword={submitResetPassword} submitResetVerify={submitResetVerify} submitVerify={submitVerify} testOtp={testOtp} verify={verify} resend={() => runBusy("Sending OTP...", () => requestOtp(authScreen === "verify" ? preAuth! : resetAuth!))} /> : null}
+        {root === "auth" ? <AuthLayout authScreen={authScreen} busy={busy} error={error} forgot={forgot} language={language} login={login} notice={notice} register={register} resetPassword={resetPassword} resetVerify={resetVerify} setAuthScreen={(next) => { resetNotices(); setAuthScreen(next); }} setForgot={setForgot} setLanguage={setLanguage} setLogin={setLogin} setRegister={setRegister} setResetPassword={setResetPassword} setResetVerify={setResetVerify} setVerify={setVerify} setTestOtp={setTestOtp} submitForgot={submitForgot} submitLogin={submitLogin} submitRegister={submitRegister} submitResetPassword={submitResetPassword} submitResetVerify={submitResetVerify} submitVerify={submitVerify} testOtp={testOtp} verify={verify} resend={() => runBusy("Sending OTP...", () => requestOtp(authScreen === "verify" ? preAuth! : resetAuth!))} /> : null}
         {root === "app" ? <AppShell appScreen={appScreen} search={search} setAppScreen={setAppScreen} setSearch={setSearch} user={user} visibleCrops={visibleCrops} logout={logout} /> : null}
       </SafeAreaView>
     </SafeAreaProvider>
@@ -242,63 +418,93 @@ function LoadingScreen({ darkMode }: { darkMode: boolean }) {
   return <ImageBackground source={darkMode ? splashDarkBackground : splashLightBackground} resizeMode="cover" style={s.loadingScreen}><View style={[s.overlay, darkMode ? s.overlayDark : s.overlayLight]} /><View style={s.loadingCard}><Brand inverse={darkMode} compact /><ActivityIndicator color={darkMode ? "#F4F7EA" : colors.green} style={s.loadingSpinner} /><Text style={[s.loadingTitle, darkMode && s.loadingTitleInverse]}>Loading{".".repeat(dots)}</Text><Text style={[s.metaCenter, darkMode && s.metaCenterInverse]}>Preparing your farm workspace...</Text></View></ImageBackground>;
 }
 
-function AuthLayout(props: { authScreen: AuthScreen; busy: string; error: string; forgot: { email: string }; login: { email: string; password: string }; notice: string; register: { username: string; email: string; password: string; full_name: string; city: string; state: string; district: string; pincode: string; role: string }; resetPassword: { password: string; confirm_password: string }; resetVerify: { email: string; otp: string }; setAuthScreen: (screen: AuthScreen) => void; setForgot: React.Dispatch<React.SetStateAction<{ email: string }>>; setLogin: React.Dispatch<React.SetStateAction<{ email: string; password: string }>>; setRegister: React.Dispatch<React.SetStateAction<{ username: string; email: string; password: string; full_name: string; city: string; state: string; district: string; pincode: string; role: string }>>; setResetPassword: React.Dispatch<React.SetStateAction<{ password: string; confirm_password: string }>>; setResetVerify: React.Dispatch<React.SetStateAction<{ email: string; otp: string }>>; setVerify: React.Dispatch<React.SetStateAction<{ email: string; otp: string }>>; setTestOtp: React.Dispatch<React.SetStateAction<string>>; submitForgot: () => Promise<void>; submitLogin: () => Promise<void>; submitRegister: () => Promise<void>; submitResetPassword: () => Promise<void>; submitResetVerify: () => Promise<void>; submitVerify: () => Promise<void>; testOtp: string; verify: { email: string; otp: string }; resend: () => Promise<void> }) {
-  const { authScreen, busy, error, forgot, login, notice, register, resetPassword, resetVerify, setAuthScreen, setForgot, setLogin, setRegister, setResetPassword, setResetVerify, setVerify, setTestOtp, submitForgot, submitLogin, submitRegister, submitResetPassword, submitResetVerify, submitVerify, testOtp, verify, resend } = props;
+function AuthLayout(props: { authScreen: AuthScreen; busy: string; error: string; forgot: { email: string }; language: LanguageCode; login: { email: string; password: string }; notice: string; register: { username: string; email: string; password: string; full_name: string; city: string; state: string; district: string; pincode: string; role: string }; resetPassword: { password: string; confirm_password: string }; resetVerify: { email: string; otp: string }; setAuthScreen: (screen: AuthScreen) => void; setForgot: React.Dispatch<React.SetStateAction<{ email: string }>>; setLanguage: React.Dispatch<React.SetStateAction<LanguageCode>>; setLogin: React.Dispatch<React.SetStateAction<{ email: string; password: string }>>; setRegister: React.Dispatch<React.SetStateAction<{ username: string; email: string; password: string; full_name: string; city: string; state: string; district: string; pincode: string; role: string }>>; setResetPassword: React.Dispatch<React.SetStateAction<{ password: string; confirm_password: string }>>; setResetVerify: React.Dispatch<React.SetStateAction<{ email: string; otp: string }>>; setVerify: React.Dispatch<React.SetStateAction<{ email: string; otp: string }>>; setTestOtp: React.Dispatch<React.SetStateAction<string>>; submitForgot: () => Promise<void>; submitLogin: () => Promise<void>; submitRegister: () => Promise<void>; submitResetPassword: () => Promise<void>; submitResetVerify: () => Promise<void>; submitVerify: () => Promise<void>; testOtp: string; verify: { email: string; otp: string }; resend: () => Promise<void> }) {
+  const { authScreen, busy, error, forgot, language, login, notice, register, resetPassword, resetVerify, setAuthScreen, setForgot, setLanguage, setLogin, setRegister, setResetPassword, setResetVerify, setVerify, setTestOtp, submitForgot, submitLogin, submitRegister, submitResetPassword, submitResetVerify, submitVerify, testOtp, verify, resend } = props;
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   return (
     <ScrollView contentContainerStyle={s.authWrap} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <View style={s.authHero}><Brand compact /><Text style={s.heroTitle}>Smart Farmer Access</Text><Text style={s.meta}>Mobile now follows the same login, OTP verify, register, and reset-password flow as the web app.</Text></View>
+      <View style={s.authHero}>
+        <View style={s.languageRow}>
+          <Text style={s.languageLabel}>{t(language, "language_label")}</Text>
+          <View style={s.languageDropdownWrap}>
+            <Pressable style={s.languageDropdownTrigger} onPress={() => setLanguageMenuOpen((current) => !current)}>
+              <Text style={s.languageDropdownValue}>{LANGUAGE_OPTIONS.find((option) => option.code === language)?.label || "EN"}</Text>
+              <FontAwesome6 color={colors.dark} name={languageMenuOpen ? "chevron-up" : "chevron-down"} size={12} />
+            </Pressable>
+            {languageMenuOpen ? (
+              <View style={s.languageDropdownMenu}>
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.code}
+                    style={[s.languageDropdownItem, language === option.code && s.languageDropdownItemActive]}
+                    onPress={() => {
+                      setLanguage(option.code);
+                      setLanguageMenuOpen(false);
+                    }}
+                  >
+                    <Text style={[s.languageDropdownItemText, language === option.code && s.languageDropdownItemTextActive]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        </View>
+        <Brand compact tagline={t(language, "brand_tagline")} />
+        <Text style={s.heroTitle}>{t(language, "auth_hero_title")}</Text>
+        <Text style={s.meta}>{t(language, "auth_hero_body")}</Text>
+      </View>
       {error ? <Notice tone="error" text={error} /> : null}
       {notice ? <Notice tone="info" text={notice} /> : null}
       {testOtp ? <Notice tone="otp" text={`Use test OTP ${testOtp} while EXPOSE_TEST_OTP is enabled.`} /> : null}
       <View style={s.card}>
         {authScreen === "login" ? <>
-          <Text style={s.title}>Login</Text>
-          <Field icon="envelope" label="Email"><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setLogin((current) => ({ ...current, email: value }))} placeholder="name@example.com" placeholderTextColor="#8A938C" style={s.input} value={login.email} /></Field>
-          <Field icon="lock" label="Password"><TextInput onChangeText={(value) => setLogin((current) => ({ ...current, password: value }))} placeholder="Enter password" placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={login.password} /></Field>
-          <Action disabled={Boolean(busy)} label={busy || "Continue to OTP"} onPress={submitLogin} />
-          <Text style={s.link} onPress={() => { setTestOtp(""); setAuthScreen("forgot"); }}>Forgot password?</Text>
-          <Text style={s.link} onPress={() => { setTestOtp(""); setAuthScreen("register"); }}>Don&apos;t have an account? <Text style={s.bold}>Sign Up</Text></Text>
+          <Text style={s.title}>{t(language, "login_title")}</Text>
+          <Field icon="envelope" label={t(language, "email")}><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setLogin((current) => ({ ...current, email: value }))} placeholder={t(language, "placeholder_email")} placeholderTextColor="#8A938C" style={s.input} value={login.email} /></Field>
+          <Field icon="lock" label={t(language, "password")}><TextInput onChangeText={(value) => setLogin((current) => ({ ...current, password: value }))} placeholder={t(language, "placeholder_password")} placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={login.password} /></Field>
+          <Action disabled={Boolean(busy)} label={busy || t(language, "continue_to_otp")} onPress={submitLogin} />
+          <Text style={s.link} onPress={() => { setTestOtp(""); setAuthScreen("forgot"); }}>{t(language, "forgot_password")}</Text>
+          <Text style={s.link} onPress={() => { setTestOtp(""); setAuthScreen("register"); }}>{t(language, "no_account")} <Text style={s.bold}>{t(language, "sign_up")}</Text></Text>
         </> : null}
         {authScreen === "verify" ? <>
-          <Text style={s.title}>Verify OTP</Text>
-          <Field icon="envelope" label="Email"><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setVerify((current) => ({ ...current, email: value }))} placeholder="name@example.com" placeholderTextColor="#8A938C" style={s.input} value={verify.email} /></Field>
-          <Field icon="key" label="OTP"><TextInput keyboardType="number-pad" onChangeText={(value) => setVerify((current) => ({ ...current, otp: value }))} placeholder="6 digit code" placeholderTextColor="#8A938C" style={s.input} value={verify.otp} /></Field>
-          <Action disabled={Boolean(busy)} label={busy || "Verify and Login"} onPress={submitVerify} />
-          <Text style={s.link} onPress={resend}>Resend OTP</Text>
-          <Text style={s.link} onPress={() => { setTestOtp(""); setAuthScreen("login"); }}>Back to login</Text>
+          <Text style={s.title}>{t(language, "verify_title")}</Text>
+          <Field icon="envelope" label={t(language, "email")}><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setVerify((current) => ({ ...current, email: value }))} placeholder={t(language, "placeholder_email")} placeholderTextColor="#8A938C" style={s.input} value={verify.email} /></Field>
+          <Field icon="key" label={t(language, "otp")}><TextInput keyboardType="number-pad" onChangeText={(value) => setVerify((current) => ({ ...current, otp: value }))} placeholder={t(language, "placeholder_otp")} placeholderTextColor="#8A938C" style={s.input} value={verify.otp} /></Field>
+          <Action disabled={Boolean(busy)} label={busy || t(language, "verify_and_login")} onPress={submitVerify} />
+          <Text style={s.link} onPress={resend}>{t(language, "resend_otp")}</Text>
+          <Text style={s.link} onPress={() => { setTestOtp(""); setAuthScreen("login"); }}>{t(language, "back_to_login")}</Text>
         </> : null}
         {authScreen === "register" ? <>
-          <Text style={s.title}>Register</Text>
-          <Field icon="user" label="Username"><TextInput autoCapitalize="none" onChangeText={(value) => setRegister((current) => ({ ...current, username: value }))} placeholder="username" placeholderTextColor="#8A938C" style={s.input} value={register.username} /></Field>
-          <Field icon="id-card" label="Full Name"><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, full_name: value }))} placeholder="Full name" placeholderTextColor="#8A938C" style={s.input} value={register.full_name} /></Field>
-          <Field icon="envelope" label="Email"><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setRegister((current) => ({ ...current, email: value }))} placeholder="name@example.com" placeholderTextColor="#8A938C" style={s.input} value={register.email} /></Field>
-          <Field icon="lock" label="Password"><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, password: value }))} placeholder="Minimum 8 characters" placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={register.password} /></Field>
-          <Field icon="users" label="Role"><View style={s.row}>{["customer", "farmer"].map((role) => <Pressable key={role} style={[s.chip, register.role === role && s.chipActive]} onPress={() => setRegister((current) => ({ ...current, role }))}><Text style={[s.chipText, register.role === role && s.chipTextActive]}>{role === "customer" ? "Customer" : "Farmer"}</Text></Pressable>)}</View></Field>
-          <Field icon="location-dot" label="City"><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, city: value }))} placeholder="City" placeholderTextColor="#8A938C" style={s.input} value={register.city} /></Field>
-          <Field icon="map" label="State"><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, state: value }))} placeholder="State" placeholderTextColor="#8A938C" style={s.input} value={register.state} /></Field>
-          <Field icon="map-pin" label="District"><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, district: value }))} placeholder="District" placeholderTextColor="#8A938C" style={s.input} value={register.district} /></Field>
-          <Field icon="hashtag" label="Pincode"><TextInput keyboardType="number-pad" onChangeText={(value) => setRegister((current) => ({ ...current, pincode: value }))} placeholder="Pincode" placeholderTextColor="#8A938C" style={s.input} value={register.pincode} /></Field>
-          <Action disabled={Boolean(busy)} label={busy || "Create Account"} onPress={submitRegister} />
-          <Text style={s.link} onPress={() => setAuthScreen("login")}>Already have an account? <Text style={s.bold}>Login</Text></Text>
+          <Text style={s.title}>{t(language, "register_title")}</Text>
+          <Field icon="user" label={t(language, "username")}><TextInput autoCapitalize="none" onChangeText={(value) => setRegister((current) => ({ ...current, username: value }))} placeholder={t(language, "placeholder_username")} placeholderTextColor="#8A938C" style={s.input} value={register.username} /></Field>
+          <Field icon="id-card" label={t(language, "full_name")}><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, full_name: value }))} placeholder={t(language, "placeholder_full_name")} placeholderTextColor="#8A938C" style={s.input} value={register.full_name} /></Field>
+          <Field icon="envelope" label={t(language, "email")}><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setRegister((current) => ({ ...current, email: value }))} placeholder={t(language, "placeholder_email")} placeholderTextColor="#8A938C" style={s.input} value={register.email} /></Field>
+          <Field icon="lock" label={t(language, "password")}><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, password: value }))} placeholder={t(language, "placeholder_password_min")} placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={register.password} /></Field>
+          <Field icon="users" label={t(language, "role")}><View style={s.row}>{["customer", "farmer"].map((role) => <Pressable key={role} style={[s.chip, register.role === role && s.chipActive]} onPress={() => setRegister((current) => ({ ...current, role }))}><Text style={[s.chipText, register.role === role && s.chipTextActive]}>{role === "customer" ? t(language, "customer") : t(language, "farmer")}</Text></Pressable>)}</View></Field>
+          <Field icon="location-dot" label={t(language, "city")}><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, city: value }))} placeholder={t(language, "placeholder_city")} placeholderTextColor="#8A938C" style={s.input} value={register.city} /></Field>
+          <Field icon="map" label={t(language, "state")}><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, state: value }))} placeholder={t(language, "placeholder_state")} placeholderTextColor="#8A938C" style={s.input} value={register.state} /></Field>
+          <Field icon="map-pin" label={t(language, "district")}><TextInput onChangeText={(value) => setRegister((current) => ({ ...current, district: value }))} placeholder={t(language, "placeholder_district")} placeholderTextColor="#8A938C" style={s.input} value={register.district} /></Field>
+          <Field icon="hashtag" label={t(language, "pincode")}><TextInput keyboardType="number-pad" onChangeText={(value) => setRegister((current) => ({ ...current, pincode: value }))} placeholder={t(language, "placeholder_pincode")} placeholderTextColor="#8A938C" style={s.input} value={register.pincode} /></Field>
+          <Action disabled={Boolean(busy)} label={busy || t(language, "create_account")} onPress={submitRegister} />
+          <Text style={s.link} onPress={() => setAuthScreen("login")}>{t(language, "already_account")} <Text style={s.bold}>{t(language, "login_link")}</Text></Text>
         </> : null}
         {authScreen === "forgot" ? <>
-          <Text style={s.title}>Forgot Password</Text>
-          <Field icon="envelope" label="Registered Email"><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setForgot({ email: value })} placeholder="name@example.com" placeholderTextColor="#8A938C" style={s.input} value={forgot.email} /></Field>
-          <Action disabled={Boolean(busy)} label={busy || "Start Reset Flow"} onPress={submitForgot} />
-          <Text style={s.link} onPress={() => setAuthScreen("login")}>Back to login</Text>
+          <Text style={s.title}>{t(language, "forgot_title")}</Text>
+          <Field icon="envelope" label={t(language, "registered_email")}><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setForgot({ email: value })} placeholder={t(language, "placeholder_email")} placeholderTextColor="#8A938C" style={s.input} value={forgot.email} /></Field>
+          <Action disabled={Boolean(busy)} label={busy || t(language, "start_reset_flow")} onPress={submitForgot} />
+          <Text style={s.link} onPress={() => setAuthScreen("login")}>{t(language, "back_to_login")}</Text>
         </> : null}
         {authScreen === "resetVerify" ? <>
-          <Text style={s.title}>Verify Reset OTP</Text>
-          <Field icon="envelope" label="Email"><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setResetVerify((current) => ({ ...current, email: value }))} placeholder="name@example.com" placeholderTextColor="#8A938C" style={s.input} value={resetVerify.email} /></Field>
-          <Field icon="key" label="OTP"><TextInput keyboardType="number-pad" onChangeText={(value) => setResetVerify((current) => ({ ...current, otp: value }))} placeholder="6 digit code" placeholderTextColor="#8A938C" style={s.input} value={resetVerify.otp} /></Field>
-          <Action disabled={Boolean(busy)} label={busy || "Confirm OTP"} onPress={submitResetVerify} />
-          <Text style={s.link} onPress={resend}>Resend OTP</Text>
+          <Text style={s.title}>{t(language, "reset_verify_title")}</Text>
+          <Field icon="envelope" label={t(language, "email")}><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(value) => setResetVerify((current) => ({ ...current, email: value }))} placeholder={t(language, "placeholder_email")} placeholderTextColor="#8A938C" style={s.input} value={resetVerify.email} /></Field>
+          <Field icon="key" label={t(language, "otp")}><TextInput keyboardType="number-pad" onChangeText={(value) => setResetVerify((current) => ({ ...current, otp: value }))} placeholder={t(language, "placeholder_otp")} placeholderTextColor="#8A938C" style={s.input} value={resetVerify.otp} /></Field>
+          <Action disabled={Boolean(busy)} label={busy || t(language, "confirm_otp")} onPress={submitResetVerify} />
+          <Text style={s.link} onPress={resend}>{t(language, "resend_otp")}</Text>
         </> : null}
         {authScreen === "resetPassword" ? <>
-          <Text style={s.title}>Reset Password</Text>
-          <Field icon="lock" label="New Password"><TextInput onChangeText={(value) => setResetPassword((current) => ({ ...current, password: value }))} placeholder="New password" placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={resetPassword.password} /></Field>
-          <Field icon="lock" label="Confirm Password"><TextInput onChangeText={(value) => setResetPassword((current) => ({ ...current, confirm_password: value }))} placeholder="Confirm password" placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={resetPassword.confirm_password} /></Field>
-          <Action disabled={Boolean(busy)} label={busy || "Update Password"} onPress={submitResetPassword} />
+          <Text style={s.title}>{t(language, "reset_password_title")}</Text>
+          <Field icon="lock" label={t(language, "new_password")}><TextInput onChangeText={(value) => setResetPassword((current) => ({ ...current, password: value }))} placeholder={t(language, "placeholder_new_password")} placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={resetPassword.password} /></Field>
+          <Field icon="lock" label={t(language, "confirm_password")}><TextInput onChangeText={(value) => setResetPassword((current) => ({ ...current, confirm_password: value }))} placeholder={t(language, "placeholder_confirm_password")} placeholderTextColor="#8A938C" secureTextEntry style={s.input} value={resetPassword.confirm_password} /></Field>
+          <Action disabled={Boolean(busy)} label={busy || t(language, "update_password")} onPress={submitResetPassword} />
         </> : null}
       </View>
     </ScrollView>
@@ -599,8 +805,8 @@ function AppShell({ appScreen, search, setAppScreen, setSearch, user, visibleCro
   );
 }
 
-function Brand({ compact = false, inverse = false }: { compact?: boolean; inverse?: boolean }) {
-  return <View style={s.brand}><View style={[s.logo, inverse && s.logoInverse]}><FontAwesome6 color="#FFFFFF" name="seedling" size={compact ? 16 : 20} /></View><View><Text style={[s.brandTitle, compact && { fontSize: 20 }, inverse && s.brandTitleInverse]}>Smart Farmer</Text><Text style={[s.brandMeta, inverse && s.brandMetaInverse]}>Soil to table network</Text></View></View>;
+function Brand({ compact = false, inverse = false, tagline = "Soil to table network" }: { compact?: boolean; inverse?: boolean; tagline?: string }) {
+  return <View style={s.brand}><View style={[s.logo, inverse && s.logoInverse]}><FontAwesome6 color="#FFFFFF" name="seedling" size={compact ? 16 : 20} /></View><View><Text style={[s.brandTitle, compact && { fontSize: 20 }, inverse && s.brandTitleInverse]}>Smart Farmer</Text><Text style={[s.brandMeta, inverse && s.brandMetaInverse]}>{tagline}</Text></View></View>;
 }
 
 function Field({ icon, label, children }: { icon: React.ComponentProps<typeof FontAwesome6>["name"]; label: string; children: React.ReactNode }) {
@@ -621,7 +827,7 @@ async function apiRequest(path: string, body: Record<string, unknown>): Promise<
     const payload = await safeJson(response);
     return { ok: response.ok && Boolean(payload.success), message: text(payload.message) || "Request failed.", payload };
   } catch {
-    return { ok: false, message: `Unable to reach ${API_URL}. Set EXPO_PUBLIC_API_URL in apps/mobile/.env for a device.`, payload: {} };
+    return { ok: false, message: `Unable to reach ${API_URL}. Start the API server and keep your phone and computer on the same network.`, payload: {} };
   }
 }
 
@@ -663,6 +869,16 @@ const s = StyleSheet.create({
   metaCenterInverse: { color: "rgba(244,247,234,0.82)" },
   authWrap: { padding: 18, paddingBottom: 36 },
   authHero: { backgroundColor: colors.soft, borderRadius: 28, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: "#D5E7D5" },
+  languageRow: { marginBottom: 16, zIndex: 10 },
+  languageLabel: { fontSize: 12, fontWeight: "700", color: colors.dark, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1.1 },
+  languageDropdownWrap: { position: "relative", alignSelf: "flex-start", minWidth: 96 },
+  languageDropdownTrigger: { minHeight: 42, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#F9FCF5", borderWidth: 1, borderColor: "#D5E7D5", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  languageDropdownValue: { fontSize: 13, fontWeight: "800", color: colors.dark },
+  languageDropdownMenu: { position: "absolute", top: 48, left: 0, right: 0, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#D5E7D5", paddingVertical: 6, shadowColor: "#0D1D12", shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  languageDropdownItem: { paddingHorizontal: 14, paddingVertical: 10 },
+  languageDropdownItemActive: { backgroundColor: "#EDF6EE" },
+  languageDropdownItemText: { fontSize: 13, fontWeight: "700", color: colors.text },
+  languageDropdownItemTextActive: { color: colors.green },
   heroTitle: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: 16, marginBottom: 6 },
   card: { backgroundColor: colors.card, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: colors.border },
   title: { fontSize: 26, fontWeight: "800", color: colors.dark, marginBottom: 12 },

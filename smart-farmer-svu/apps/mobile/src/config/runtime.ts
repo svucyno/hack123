@@ -51,6 +51,24 @@ export function resolveWebUrl(): string {
   return "http://localhost:3000";
 }
 
+export function resolveApiUrl(): string {
+  const manualUrl = sanitizeManualUrl(process.env.EXPO_PUBLIC_API_URL || "");
+  if (manualUrl) {
+    return manualUrl;
+  }
+
+  const host =
+    extractHost((Constants.expoConfig as ExpoConfigWithHost | null)?.hostUri) ||
+    extractHost((Constants.expoGoConfig as ExpoGoConfigWithDebuggerHost | null)?.debuggerHost) ||
+    extractHost((Constants.platform as ExpoConfigWithHost | null)?.hostUri);
+
+  if (host) {
+    return `http://${host}:8000`;
+  }
+
+  return "http://localhost:8000";
+}
+
 export function buildHealthUrl(webUrl: string): string {
   return `${webUrl.replace(/\/$/, "")}/healthz`;
 }
