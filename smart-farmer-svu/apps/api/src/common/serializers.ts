@@ -112,7 +112,6 @@ export function serializeCrop(crop: unknown) {
     farmer_id: asIdString(farmer._id || record.farmer),
     name: getField(record, 'name'),
     category: getField(record, 'category'),
-    listing_code: getField(record, 'listing_code'),
     quantity,
     price: getNumber(record.price),
     harvest_date: record.harvest_date || null,
@@ -153,6 +152,9 @@ export function serializeOrderUpdate(update: unknown) {
     update_date: record.update_date || null,
     update_date_display: formatDateTime(updateDate),
     location: getField(record, 'location'),
+    note: getField(record, 'note'),
+    actor_role: getField(record, 'actor_role'),
+    eta_label: getField(record, 'eta_label'),
   };
 }
 
@@ -180,12 +182,23 @@ export function serializeCustomerOrder(order: unknown, updates: unknown[] = []) 
     order_date: record.order_date || null,
     order_date_display: formatDateOnly(orderDate),
     quantity: getNumber(record.quantity),
+    subtotal: getNumber(record.subtotal),
     total_price: getNumber(record.total_price),
+    delivery_fee: getNumber(record.delivery_fee),
+    platform_fee: getNumber(record.platform_fee),
+    discount_amount: getNumber(record.discount_amount),
     estimated_delivery: getField(record, 'estimated_delivery'),
     current_location: getField(record, 'current_location'),
     buyer_note: getField(record, 'buyer_note'),
     delivery_address: getField(record, 'delivery_address'),
     fulfillment_window: getField(record, 'fulfillment_window'),
+    requested_delivery_date: getField(record, 'requested_delivery_date'),
+    priority: getField(record, 'priority') || 'standard',
+    risk_band: getField(record, 'risk_band') || 'low',
+    customer_phone: getField(record, 'customer_phone'),
+    delivery_snapshot: getObject(record, 'delivery_snapshot'),
+    dispatch_due_at: record.dispatch_due_at || null,
+    confirmed_at: record.confirmed_at || null,
     is_bulk_order: Boolean(record.is_bulk_order),
     tracking: updates.map((update) => serializeOrderUpdate(update)),
     stage_index: stageIndex(updates, status),
@@ -205,8 +218,12 @@ export function serializeFarmerDashboardOrder(order: unknown) {
     customer_district: getField(customer, 'district'),
     customer_state: getField(customer, 'state'),
     quantity: getNumber(record.quantity),
+    subtotal: getNumber(record.subtotal),
     total_price: getNumber(record.total_price),
+    delivery_fee: getNumber(record.delivery_fee),
     status: getField(record, 'status'),
+    priority: getField(record, 'priority'),
+    risk_band: getField(record, 'risk_band'),
     payment_status: getField(record, 'payment_status') || 'pending',
     payment_method: getField(record, 'payment_method'),
     payment_provider: getField(record, 'payment_provider'),
@@ -217,10 +234,12 @@ export function serializeFarmerDashboardOrder(order: unknown) {
     buyer_note: getField(record, 'buyer_note'),
     delivery_address: getField(record, 'delivery_address'),
     fulfillment_window: getField(record, 'fulfillment_window'),
+    requested_delivery_date: getField(record, 'requested_delivery_date'),
     is_bulk_order: Boolean(record.is_bulk_order),
     order_date: record.order_date || null,
     estimated_delivery: getField(record, 'estimated_delivery'),
     current_location: getField(record, 'current_location'),
+    dispatch_due_at: record.dispatch_due_at || null,
   };
 }
 
@@ -233,12 +252,16 @@ export function serializeAdminOrder(order: unknown) {
     customer_name: getField(customer, 'full_name') || getField(customer, 'username'),
     crop_name: getField(crop, 'name'),
     quantity: getNumber(record.quantity),
+    subtotal: getNumber(record.subtotal),
     total_price: getNumber(record.total_price),
+    priority: getField(record, 'priority'),
+    risk_band: getField(record, 'risk_band'),
     status: getField(record, 'status'),
     payment_status: getField(record, 'payment_status'),
     order_date: record.order_date || null,
     estimated_delivery: getField(record, 'estimated_delivery'),
     current_location: getField(record, 'current_location'),
+    dispatch_due_at: record.dispatch_due_at || null,
   };
 }
 
@@ -279,31 +302,6 @@ export function serializeDiseaseReport(report: unknown) {
     id: asIdString(record._id),
     crop_name: getField(record, 'crop_name'),
     symptoms: getField(record, 'symptoms'),
-    image_name: getField(record, 'image_name'),
-    image_url: mediaField(record, 'image_path', 'image_name'),
-    risk_level: getField(record, 'risk_level'),
-    predicted_disease: getField(record, 'predicted_disease'),
-    recommendation: getField(record, 'recommendation'),
-    confidence: getNumber(record.confidence),
-    region: getField(record, 'region'),
-    created_at: record.created_at || null,
-    created_at_display: formatDateTime(createdAt),
-  };
-}
-
-export function serializeIrrigationPlan(plan: unknown) {
-  const record = asRecord(plan);
-  const createdAt = record.created_at instanceof Date ? record.created_at : record.created_at ? new Date(record.created_at) : null;
-  return {
-    id: asIdString(record._id),
-    crop_name: getField(record, 'crop_name'),
-    soil_moisture: getNumber(record.soil_moisture),
-    rainfall_mm: getNumber(record.rainfall_mm),
-    temperature_c: getNumber(record.temperature_c),
-    recommendation: getField(record, 'recommendation'),
-    next_watering_window: getField(record, 'next_watering_window'),
-    water_saving_percent: getNumber(record.water_saving_percent),
-    automation_ready: Boolean(record.automation_ready),
     created_at: record.created_at || null,
     created_at_display: formatDateTime(createdAt),
   };
