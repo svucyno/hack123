@@ -1,8 +1,8 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { addCropAction } from "@/server/farmer";
+import { submitReviewAction } from "@/server/customer";
 
 export async function POST(request: Request) {
-  return addCropAction(request as any);
+  return submitReviewAction(request as any);
 }

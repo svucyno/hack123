@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { apiFetch } from "@/lib/api";
-import { buildMarketplaceExperience, normalizeMarketplaceFilters } from "@/lib/commerce-view";
 import { COOKIE_NAMES } from "@/lib/cookies";
 import { redirect, redirectWithFlash } from "@/lib/http";
 import { renderTemplate } from "@/lib/template";
@@ -25,7 +24,6 @@ export async function marketplacePage(request: NextRequest): Promise<NextRespons
     return sessionOrResponse;
   }
 
-  const filters = normalizeMarketplaceFilters(request.nextUrl.searchParams);
   const search = request.nextUrl.search || "";
   const { response, data } = await apiFetch(`/api/marketplace/crops${search}`, { method: "GET" }, sessionOrResponse.token);
   const authRedirect = authFailureRedirect(request, response.status);
@@ -36,15 +34,6 @@ export async function marketplacePage(request: NextRequest): Promise<NextRespons
     return redirectWithFlash(request, "/", "error", String(data.message || "Unable to load marketplace"));
   }
 
-  let customerSummary: Record<string, unknown> = {};
-  if (sessionOrResponse.user?.role === "customer") {
-    const orderResult = await apiFetch("/api/orders/my", { method: "GET" }, sessionOrResponse.token);
-    if (orderResult.response.ok && orderResult.data.success) {
-      customerSummary = asRecord(orderResult.data.summary);
-    }
-  }
-
-  const experience = buildMarketplaceExperience(asArray(data.crops), asRecord(data.stats), filters, customerSummary);
   const welcomeMessage = sessionOrResponse.hasVisited
     ? tForRequest(request, "marketplace.kicker.welcome_back", "Welcome Back to the network")
     : tForRequest(request, "marketplace.kicker.welcome", "Welcome to the network");
@@ -53,21 +42,20 @@ export async function marketplacePage(request: NextRequest): Promise<NextRespons
     request,
     "index.html",
     {
-      ...experience,
-      query: filters.query,
-      state: filters.state,
-      district: filters.district,
-      category: filters.category,
-      price_min: filters.priceMin,
-      price_max: filters.priceMax,
-      verified_only: filters.verifiedOnly,
-      sort: filters.sort,
+      crops: asArray(data.crops),
+      query: request.nextUrl.searchParams.get("query") || "",
+      state: request.nextUrl.searchParams.get("state") || "",
+      district: request.nextUrl.searchParams.get("district") || "",
+      category: request.nextUrl.searchParams.get("category") || "",
+      price_min: request.nextUrl.searchParams.get("price_min") || "",
+      price_max: request.nextUrl.searchParams.get("price_max") || "",
+      verified_only: request.nextUrl.searchParams.get("verified_only") === "true",
+      sort: request.nextUrl.searchParams.get("sort") || "newest",
       categories: asArray(data.categories),
       states: asArray(data.states),
       stats: asRecord(data.stats),
       sort_options: asArray(data.sort_options),
       welcome_message: welcomeMessage,
-      customer_summary: customerSummary,
     },
     "marketplace",
   );
@@ -112,29 +100,17 @@ export async function placeOrderAction(request: NextRequest): Promise<NextRespon
   }
 
   const formData = await request.formData();
-  const quantityValue = Math.max(1, Number.parseFloat(getString(formData, "quantity") || "1"));
-  const deliveryAddress = getString(formData, "delivery_address");
-  if (!deliveryAddress) {
-    return redirectWithFlash(request, "/marketplace", "error", "Add a delivery address before placing the order");
-  }
-
   const { response, data } = await apiFetch(
     "/api/orders/place",
     {
       method: "POST",
       body: {
         crop_id: getString(formData, "crop_id"),
-        quantity: String(quantityValue),
+        quantity: getString(formData, "quantity"),
         buyer_note: getString(formData, "buyer_note"),
-        delivery_address: deliveryAddress,
+        delivery_address: getString(formData, "delivery_address"),
         fulfillment_window: getString(formData, "fulfillment_window"),
-        desired_delivery_date: getString(formData, "desired_delivery_date"),
         payment_method: getString(formData, "payment_method") || "UPI",
-        payment_intent: getString(formData, "payment_intent") || "pay_now",
-        quality_preference: getString(formData, "quality_preference") || "standard",
-        packaging_type: getString(formData, "packaging_type") || "bags",
-        preferred_contact_mode: getString(formData, "preferred_contact_mode") || "chat",
-        delivery_instructions: getString(formData, "delivery_instructions"),
         is_bulk_order: getString(formData, "is_bulk_order") === "on",
       },
     },
