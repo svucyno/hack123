@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="surface-panel reveal rounded-[1.8rem] px-5 py-6 sm:px-7 sm:py-8">
+    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+            <span class="section-kicker"><i class="fa-solid fa-cart-flatbed-suitcase"></i> Order center</span>
+            <h1 class="mt-4 font-display text-3xl font-bold text-soil sm:text-[2.7rem]">Track payments, dispatch, invoices, and next actions from one workspace.</h1>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-ink/70">Use search and operational filters to focus on what needs your attention first: payments to close, shipments in motion, or delivered orders waiting for review.</p>
+        </div>
+        <div class="order-center-grid">
+            {% for metric in workspace_metrics %}
+            <div class="metric-card min-w-[9rem]">
+                <p class="metric-label">{{ metric.label }}</p>
+                <p class="metric-value">{{ metric.value }}</p>
+                <p class="marketplace-inline-note">{{ metric.note }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="mt-8 grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+    <article class="surface-panel reveal rounded-[1.8rem] px-5 py-6 sm:px-7 sm:py-7">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <span class="section-kicker"><i class="fa-solid fa-filter-circle-dollar"></i> Workspace filters</span>
+                <h2 class="mt-3 font-display text-[1.9rem] font-bold text-soil">Find the orders that need action</h2>
+            </div>
+            <a href="{{ url_for('marketplace') }}" class="btn-outline-app"><i class="fa-solid fa-store"></i> Back to marketplace</a>
+        </div>
+        <form action="{{ url_for('my_orders') }}" method="GET" class="mt-6 grid gap-4" data-auto-submit-filters="orders">
+            <div class="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+                <div>
+                    <label class="field-label">Search crop, farmer, invoice, tracking</label>
+                    <input class="input-shell" type="text" name="query" value="{{ order_search or '' }}" placeholder="Tomato, invoice id, farmer, tracking code">
+                </div>
+                <div>
+                    <label class="field-label">Sort workspace</label>
+                    <select class="select-shell" name="sort">
+                        <option value="latest" {% if selected_sort == 'latest' %}selected{% endif %}>Latest activity</option>
+                        <option value="amount" {% if selected_sort == 'amount' %}selected{% endif %}>Highest amount</option>
+                        <option value="progress" {% if selected_sort == 'progress' %}selected{% endif %}>Most progressed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="field-label">Status</label>
+                    <select class="select-shell" name="status">
+                        <option value="" {% if not selected_status %}selected{% endif %}>Any status</option>
+                        <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="Paid" {% if selected_status == 'Paid' %}selected{% endif %}>Paid</option>
+                        <option value="Order Confirmed" {% if selected_status == 'Order Confirmed' %}selected{% endif %}>Confirmed</option>
+                        <option value="Packed" {% if selected_status == 'Packed' %}selected{% endif %}>Packed</option>
+                        <option value="Shipped" {% if selected_status == 'Shipped' %}selected{% endif %}>Shipped</option>
+                        <option value="Out for Delivery" {% if selected_status == 'Out for Delivery' %}selected{% endif %}>Out for delivery</option>
+                        <option value="Delivered" {% if selected_status == 'Delivered' %}selected{% endif %}>Delivered</option>
+                        <option value="Cancelled" {% if selected_status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Payment</label>
+                    <select class="select-shell" name="payment">
+                        <option value="" {% if not selected_payment %}selected{% endif %}>Any payment state</option>
+                        <option value="pending" {% if selected_payment == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="confirmed" {% if selected_payment == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Tab</label>
+                    <select class="select-shell" name="tab">
+                        <option value="overview" {% if selected_tab == 'overview' %}selected{% endif %}>Overview</option>
+                        <option value="payments" {% if selected_tab == 'payments' %}selected{% endif %}>Payments</option>
+                        <option value="history" {% if selected_tab == 'history' %}selected{% endif %}>History</option>
+                    </select>
+                </div>
+            </div>
+            <div class="marketplace-actions-row">
+                <button type="submit" class="btn-primary-app"><i class="fa-solid fa-sliders"></i> Apply filters</button>
+                <a href="{{ url_for('my_orders') }}" class="btn-outline-app"><i class="fa-solid fa-rotate-left"></i> Reset workspace</a>
+            </div>
+        </form>
+    </article>
+
+    <article class="surface-panel reveal rounded-[1.8rem] px-5 py-6 sm:px-6 sm:py-6">
+        <span class="section-kicker"><i class="fa-solid fa-credit-card"></i> Payment watchlist</span>
+        <h2 class="mt-3 font-display text-[1.85rem] font-bold text-soil">Items that still need closure</h2>
+        <div class="mt-5 space-y-3">
+            {% for item in payment_watchlist %}
+            <div class="watchlist-row">
+                <div>
+                    <p class="font-semibold text-soil">{{ item.crop_name }}</p>
+                    <p class="text-sm text-ink/58">ETA {{ item.eta or 'Awaiting update' }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-semibold text-soil">{{ item.amount }}</p>
+                    <p class="text-xs uppercase tracking-[0.16em] text-ink/42">{{ item.next_action }}</p>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-sm text-ink/60">No open payment items in the current filtered view.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="mt-8 reveal">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <span class="section-kicker"><i class="fa-solid fa-truck-fast"></i> Fulfillment board</span>
+            <h2 class="mt-3 font-display text-[1.95rem] font-bold text-soil">What needs your attention now</h2>
+        </div>
+    </div>
+    <div class="mt-6 grid gap-5 xl:grid-cols-3">
+        {% for column in board_columns %}
+        <article class="surface-card p-5">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="font-display text-[1.45rem] font-bold text-soil">{{ column.title }}</h3>
+                    <p class="mt-2 text-sm text-ink/62">{{ column.note }}</p>
+                </div>
+                <span class="badge-app badge-neutral">{{ column.items|length }}</span>
+            </div>
+            <div class="mt-4 space-y-3">
+                {% for item in column.items %}
+                <div class="marketplace-lane-item">
+                    <div>
+                        <p class="font-semibold text-soil">{{ item.crop_name }}</p>
+                        <p class="text-sm text-ink/58">{{ item.payment_badge }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold text-soil">{{ item.status }}</p>
+                        <p class="text-xs uppercase tracking-[0.16em] text-ink/42">{{ item.next_action }}</p>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-sm text-ink/55">Nothing in this lane right now.</p>
+                {% endfor %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mt-10 reveal">
+    <div>
+        <span class="section-kicker"><i class="fa-solid fa-layer-group"></i> Active orders</span>
+        <h2 class="mt-3 font-display text-[1.9rem] font-bold text-soil">Operational order cards</h2>
+    </div>
+    <div class="mt-6 grid gap-5 xl:grid-cols-2">
+        {% for order in active_orders %}
+        <article class="surface-card reveal p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-ink/45">{{ order.order_date_display }}</p>
+                    <h3 class="mt-2 font-display text-[1.75rem] font-bold text-soil">{{ order.crop_name }}</h3>
+                    <p class="mt-2 text-sm text-ink/62">Farmer: {{ order.farmer_name }}</p>
+                    <p class="mt-1 text-sm text-ink/62">Invoice: {{ order.invoice_number or '--' }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <span class="badge-app {% if order.payment_status == 'confirmed' %}badge-success{% else %}badge-warning{% endif %}">{{ order.payment_badge }}</span>
+                    <span class="badge-app {% if order.risk_band == 'stable' %}badge-success{% elif order.risk_band == 'watch' %}badge-warning{% else %}badge-danger{% endif %}">{{ order.risk_band_label }}</span>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-4">
+                <div class="mini-metric"><span>Amount</span><strong>Rs.{{ "%.2f"|format(order.total_price) }}</strong></div>
+                <div class="mini-metric"><span>Quantity</span><strong>{{ order.quantity }}</strong></div>
+                <div class="mini-metric"><span>Progress</span><strong>{{ order.progress_percent }}%</strong></div>
+                <div class="mini-metric"><span>Timeline</span><strong>{{ order.timeline_events }}</strong></div>
+            </div>
+
+            <div class="progress-shell mt-5">
+                <div class="progress-bar" style="width: {{ order.progress_percent }}%"></div>
+            </div>
+            <p class="mt-3 text-sm text-ink/62">{{ order.delivery_brief }}</p>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                {% if order.payment_status != 'confirmed' %}
+                <a href="{{ url_for('checkout', order_id=order.id) }}" class="btn-primary-app w-full justify-center"><i class="fa-solid fa-credit-card"></i> Complete payment</a>
+                {% endif %}
+                <a href="{{ url_for('invoice', order_id=order.id) }}" class="btn-outline-app w-full justify-center"><i class="fa-solid fa-file-invoice"></i> Open invoice</a>
+                <a href="{{ url_for('chat_start', crop_id=order.crop_id) }}" class="btn-outline-app w-full justify-center"><i class="fa-solid fa-comments"></i> Chat farmer</a>
+                {% if order.status in ['pending', 'Paid', 'Order Confirmed'] %}
+                <form action="{{ url_for('cancel_order', order_id=order.id) }}" method="POST" onsubmit="return confirm('Cancel this order?');">
+                    <button type="submit" class="btn-danger-app w-full justify-center"><i class="fa-solid fa-xmark"></i> Cancel order</button>
+                </form>
+                {% endif %}
+            </div>
+        </article>
+        {% else %}
+        <div class="empty-state xl:col-span-2">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-mist text-2xl text-leaf/55"><i class="fa-solid fa-basket-shopping"></i></div>
+            <h3 class="mt-5 font-display text-[2rem] font-bold text-soil">No active orders in this workspace</h3>
+            <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-ink/65 sm:text-base">Try removing a filter, or go back to the marketplace to place a new order.</p>
+            <a href="{{ url_for('marketplace') }}" class="btn-primary-app mt-6"><i class="fa-solid fa-arrow-right"></i> Browse marketplace</a>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mt-10 reveal">
+    <div>
+        <span class="section-kicker"><i class="fa-solid fa-clock-rotate-left"></i> History</span>
+        <h2 class="mt-3 font-display text-[1.9rem] font-bold text-soil">Delivered and cancelled archive</h2>
+    </div>
+    <div class="mt-6 grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+        {% for order in order_history %}
+        <article class="surface-card reveal p-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="font-bold text-soil">{{ order.crop_name }}</h3>
+                    <p class="mt-1 text-sm text-ink/55">{{ order.order_date_display }}</p>
+                    <p class="mt-1 text-sm text-ink/55">{{ order.invoice_number or '--' }}</p>
+                </div>
+                <span class="badge-app {% if order.status == 'Delivered' %}badge-success{% else %}badge-danger{% endif %}">{{ order.status }}</span>
+            </div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                <div class="mini-metric"><span>Amount</span><strong>Rs.{{ "%.2f"|format(order.total_price) }}</strong></div>
+                <div class="mini-metric"><span>Payment</span><strong>{{ order.payment_badge }}</strong></div>
+            </div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                <a href="{{ url_for('invoice', order_id=order.id) }}" class="btn-outline-app w-full justify-center"><i class="fa-solid fa-file-invoice"></i> Invoice</a>
+                {% if order.status == 'Delivered' %}
+                <form action="{{ url_for('submit_review') }}" method="POST">
+                    <input type="hidden" name="order_id" value="{{ order.id }}">
+                    <input type="hidden" name="farmer_id" value="{{ order.farmer_id }}">
+                    <input type="hidden" name="rating" value="5">
+                    <input type="hidden" name="comment" value="Smooth delivery and consistent produce quality.">
+                    <button type="submit" class="btn-primary-app w-full justify-center"><i class="fa-solid fa-star"></i> Quick review</button>
+                </form>
+                {% endif %}
+            </div>
+        </article>
+        {% else %}
+        <div class="empty-state lg:col-span-2 xl:col-span-3">
+            <h3 class="font-display text-[2rem] font-bold text-soil">No archive results found</h3>
+            <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-ink/65 sm:text-base">Delivered and cancelled orders will appear here once your workflow progresses.</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
