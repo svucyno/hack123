@@ -27,13 +27,6 @@ export class OrdersController {
 
   @UseGuards(TokenAuthGuard, RolesGuard)
   @Roles('customer')
-  @Get('my/summary')
-  myOrdersSummary(@Req() request: AuthenticatedRequest) {
-    return this.ordersService.myOrdersSummary(request.user!);
-  }
-
-  @UseGuards(TokenAuthGuard, RolesGuard)
-  @Roles('customer')
   @Post('confirm-payment')
   confirmPayment(@Req() request: AuthenticatedRequest, @Body() body: Record<string, unknown>) {
     return this.ordersService.confirmPayment(request.user!, body);
@@ -44,13 +37,6 @@ export class OrdersController {
   @Post('farmer/update-status')
   farmerUpdateOrder(@Req() request: AuthenticatedRequest, @Body() body: Record<string, unknown>) {
     return this.ordersService.farmerUpdateOrder(request.user!, body);
-  }
-
-  @UseGuards(TokenAuthGuard, RolesGuard)
-  @Roles('farmer')
-  @Get('farmer/queue')
-  farmerQueue(@Req() request: AuthenticatedRequest) {
-    return this.ordersService.farmerQueue(request.user!);
   }
 
   @UseGuards(TokenAuthGuard, RolesGuard)
@@ -75,28 +61,10 @@ export class OrdersController {
   }
 
   @UseGuards(TokenAuthGuard, RolesGuard)
-  @Roles('customer', 'farmer', 'admin')
-  @Get(':orderId/tracking')
-  trackingForUser(@Req() request: AuthenticatedRequest, @Param('orderId') orderId: string) {
-    return this.ordersService.trackingForUser(request.user!, orderId);
-  }
-
-  @UseGuards(TokenAuthGuard, RolesGuard)
   @Roles('customer')
   @Get(':orderId')
   orderDetail(@Req() request: AuthenticatedRequest, @Param('orderId') orderId: string) {
     return this.ordersService.orderDetail(request.user!, orderId);
-  }
-
-  @UseGuards(TokenAuthGuard, RolesGuard)
-  @Roles('customer')
-  @Patch(':orderId/delivery-address')
-  updateDeliveryAddress(
-    @Req() request: AuthenticatedRequest,
-    @Param('orderId') orderId: string,
-    @Body() body: Record<string, unknown>,
-  ) {
-    return this.ordersService.updateDeliveryAddress(request.user!, orderId, body);
   }
 
   @UseGuards(TokenAuthGuard, RolesGuard)

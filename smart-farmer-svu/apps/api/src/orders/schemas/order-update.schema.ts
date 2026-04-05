@@ -14,15 +14,6 @@ export class OrderUpdate {
 
   @Prop({ default: '' })
   location!: string;
-
-  @Prop({ default: '' })
-  note!: string;
-
-  @Prop({ default: '' })
-  actor_role!: string;
-
-  @Prop({ default: '' })
-  eta_label!: string;
 }
 
 export type OrderUpdateDocument = HydratedDocument<OrderUpdate>;

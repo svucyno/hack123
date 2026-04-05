@@ -5,7 +5,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 
 import { User } from '../auth/schemas/user.schema';
-import { ORDER_STAGES, DEV_PAYMENT_METHODS, DEV_PAYMENT_PROVIDERS, type DevPaymentMethod } from '../common/constants';
+import { DEV_PAYMENT_METHODS, DEV_PAYMENT_PROVIDERS, type DevPaymentMethod } from '../common/constants';
 import { ok, fail } from '../common/http-response';
 import {
   serializeAdminOrder,
@@ -21,14 +21,6 @@ import { Notification } from '../smart/schemas/notification.schema';
 
 import { Order } from './schemas/order.schema';
 import { OrderUpdate } from './schemas/order-update.schema';
-import {
-  assertAllowedOrderTransition,
-  buildDispatchSnapshot,
-  buildOrderBreakdown,
-  computeFulfillmentPriority,
-  computeRiskBand,
-  normalizeOrderPlacementPayload,
-} from './orders.validation';
 
 @Injectable()
 export class OrdersService {
@@ -41,26 +33,35 @@ export class OrdersService {
   ) {}
 
   async placeOrder(customer: any, body: Record<string, unknown>) {
-    const payload = normalizeOrderPlacementPayload(body);
+    const cropId = String(body.crop_id || '');
+    const quantity = Number(body.quantity || 0);
+    const buyerNote = String(body.buyer_note || '').trim();
+    const deliveryAddress = String(body.delivery_address || '').trim();
+    const fulfillmentWindow = String(body.fulfillment_window || '').trim();
+    const requestedBulk = this.toBoolean(body.is_bulk_order);
+    const paymentMethod = String(body.payment_method || 'UPI').trim();
 
-    if (!isValidObjectId(payload.cropId)) {
+    if (!isValidObjectId(cropId)) {
       fail('Crop not found', 'crop_not_found', HttpStatus.NOT_FOUND);
     }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      fail('Requested quantity must be greater than zero', 'invalid_quantity');
+    }
 
-    const existingCrop: any = await this.cropModel.findById(payload.cropId).populate('farmer');
+    const existingCrop: any = await this.cropModel.findById(cropId).populate('farmer');
     if (!existingCrop) {
       fail('Crop not found', 'crop_not_found', HttpStatus.NOT_FOUND);
     }
 
     const minOrderQuantity = Math.max(Number(existingCrop.min_order_quantity || 1), 0.1);
-    if (payload.quantity < minOrderQuantity) {
+    if (quantity < minOrderQuantity) {
       fail(`Minimum order quantity is ${minOrderQuantity} ${existingCrop.unit || 'kg'}.`, 'below_minimum_order');
     }
 
     const crop: any = await this.cropModel
       .findOneAndUpdate(
-        { _id: payload.cropId, quantity: { $gte: payload.quantity } },
-        { $inc: { quantity: -payload.quantity } },
+        { _id: cropId, quantity: { $gte: quantity } },
+        { $inc: { quantity: -quantity } },
         { new: true },
       )
       .populate('farmer');
@@ -73,42 +74,26 @@ export class OrdersService {
     await crop.save();
 
     const farmer = crop.farmer as any;
-    const requestedBulk = payload.requestedBulk || payload.quantity >= minOrderQuantity * 10;
-    const breakdown = buildOrderBreakdown(Number(crop.price || 0), payload.quantity, Number(crop.delivery_radius_km || 25), requestedBulk);
-    const priority = computeFulfillmentPriority(payload.quantity, breakdown.total, Boolean(crop.same_day_available));
-    const riskBand = computeRiskBand(payload.paymentMethod, breakdown.total, requestedBulk);
-    const deliverySnapshot = buildDispatchSnapshot(payload.quantity, crop.unit || 'kg', priority, Boolean(crop.same_day_available));
-    const dispatchDueAt = this.computeDispatchDueAt(priority, Boolean(crop.same_day_available));
-
+    const totalPrice = Number((quantity * Number(crop.price || 0)).toFixed(2));
     const order = await this.orderModel.create({
       customer: customer._id,
       crop: crop._id,
-      quantity: payload.quantity,
-      subtotal: breakdown.subtotal,
-      delivery_fee: breakdown.deliveryFee,
-      platform_fee: breakdown.platformFee,
-      discount_amount: breakdown.discountAmount,
-      total_price: breakdown.total,
+      quantity,
+      total_price: totalPrice,
       status: 'Order Placed',
       payment_status: 'pending',
-      payment_method: payload.paymentMethod,
-      estimated_delivery: this.estimateDelivery(customer, farmer, crop, priority),
+      payment_method: paymentMethod,
+      estimated_delivery: this.estimateDelivery(customer, farmer, crop),
       current_location: farmer.city || farmer.state || '',
-      is_bulk_order: requestedBulk || breakdown.total >= 5000,
-      buyer_note: payload.buyerNote,
-      delivery_address: payload.deliveryAddress || [customer.city, customer.district, customer.state, customer.pincode].filter(Boolean).join(', '),
-      fulfillment_window: payload.fulfillmentWindow || (crop.same_day_available ? 'Today 5pm-8pm' : 'Next available slot'),
+      is_bulk_order: requestedBulk || quantity >= minOrderQuantity * 10 || totalPrice >= 5000,
+      buyer_note: buyerNote,
+      delivery_address: deliveryAddress || [customer.city, customer.district, customer.state, customer.pincode].filter(Boolean).join(', '),
+      fulfillment_window: fulfillmentWindow || (crop.same_day_available ? 'Today 5pm-8pm' : 'Next available slot'),
       invoice_number: this.generateInvoiceNumber(),
       tracking_code: this.generateTrackingCode(),
-      priority,
-      risk_band: riskBand,
-      requested_delivery_date: payload.requestedDeliveryDate,
-      dispatch_due_at: dispatchDueAt,
-      customer_phone: payload.customerPhone || customer.contact || '',
-      delivery_snapshot: deliverySnapshot,
     });
 
-    await this.recordOrderUpdate(order._id, 'Order Placed', farmer.city || farmer.state || '', 'Order submitted by customer', 'customer', order.estimated_delivery || '');
+    await this.recordOrderUpdate(order._id, 'Order Placed', farmer.city || farmer.state || '');
 
     const populatedOrder: any = await this.orderModel
       .findById(order._id)
@@ -121,33 +106,18 @@ export class OrdersService {
 
     await Promise.all([
       this.notifyFarmerNewOrder(populatedOrder, customer),
-      this.createNotification(farmer._id, 'New order request', `You received a new ${priority} priority order for ${crop.name}.`, 'order', {
+      this.createNotification(farmer._id, 'New order request', `You received a new order for ${crop.name}.`, 'order', {
         order_id: asIdString(order._id),
         crop_id: asIdString(crop._id),
-        priority,
       }),
       this.createNotification(customer._id, 'Order placed', `Your order for ${crop.name} has been created. Complete payment to confirm it.`, 'order', {
         order_id: asIdString(order._id),
         crop_id: asIdString(crop._id),
-        total_price: breakdown.total,
       }),
     ]);
 
     return ok('Order placed! Proceed to payment.', {
       order: serializeCustomerOrder(populatedOrder, await this.findUpdatesForOrder(order._id)),
-      pricing_breakdown: {
-        subtotal: breakdown.subtotal,
-        delivery_fee: breakdown.deliveryFee,
-        platform_fee: breakdown.platformFee,
-        discount_amount: breakdown.discountAmount,
-        total: breakdown.total,
-      },
-      fulfillment: {
-        priority,
-        risk_band: riskBand,
-        dispatch_due_at: dispatchDueAt,
-        requested_delivery_date: payload.requestedDeliveryDate,
-      },
       order_id: asIdString(order._id),
       redirect: `/checkout/${asIdString(order._id)}`,
     });
@@ -164,8 +134,6 @@ export class OrdersService {
     const serialized = orders.map((order: any) => serializeCustomerOrder(order, updatesByOrder.get(asIdString(order._id)) || []));
     const activeOrders = serialized.filter((order: any) => !['Delivered', 'Cancelled'].includes(String(order.status)));
     const orderHistory = serialized.filter((order: any) => ['Delivered', 'Cancelled'].includes(String(order.status)));
-    const pendingPayment = serialized.filter((order: any) => order.payment_status === 'pending').length;
-    const urgentOrders = serialized.filter((order: any) => order.priority === 'urgent').length;
 
     return ok('Orders loaded', {
       active_orders: activeOrders,
@@ -174,63 +142,6 @@ export class OrdersService {
         active_count: activeOrders.length,
         completed_count: orderHistory.filter((order: any) => order.status === 'Delivered').length,
         cancelled_count: orderHistory.filter((order: any) => order.status === 'Cancelled').length,
-        pending_payment_count: pendingPayment,
-        urgent_count: urgentOrders,
-        open_value: Number(activeOrders.reduce((sum: number, order: any) => sum + Number(order.total_price || 0), 0).toFixed(2)),
-      },
-    });
-  }
-
-  async myOrdersSummary(customer: any) {
-    const orders = await this.orderModel.find({ customer: customer._id }).sort({ order_date: -1 }).lean();
-    const statusCounts = new Map<string, number>();
-    let totalSpend = 0;
-    let bulkOrders = 0;
-    let delayed = 0;
-
-    orders.forEach((order: any) => {
-      const status = String(order.status || 'Order Placed');
-      statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
-      totalSpend += Number(order.total_price || 0);
-      if (order.is_bulk_order) {
-        bulkOrders += 1;
-      }
-      if (order.dispatch_due_at && new Date(order.dispatch_due_at).getTime() < Date.now() && !['Delivered', 'Cancelled'].includes(status)) {
-        delayed += 1;
-      }
-    });
-
-    return ok('Order summary loaded', {
-      total_orders: orders.length,
-      total_spend: Number(totalSpend.toFixed(2)),
-      bulk_orders: bulkOrders,
-      delayed_orders: delayed,
-      status_breakdown: [...statusCounts.entries()].map(([status, count]) => ({ status, count })),
-      latest_order_at: orders[0]?.order_date || null,
-    });
-  }
-
-  async farmerQueue(farmer: any) {
-    const orders = await this.orderModel
-      .find()
-      .sort({ order_date: -1 })
-      .populate('customer')
-      .populate({ path: 'crop', populate: { path: 'farmer' } });
-
-    const owned = orders.filter((order: any) => asIdString(order.crop?.farmer?._id || order.crop?.farmer) === asIdString(farmer._id));
-    const queue = owned.map((order: any) => ({
-      ...serializeFarmerDashboardOrder(order),
-      sla_bucket: this.computeSlaBucket(order),
-      needs_attention: this.orderNeedsAttention(order),
-    }));
-
-    return ok('Farmer queue loaded', {
-      queue,
-      summary: {
-        total: queue.length,
-        awaiting_confirmation: queue.filter((order: any) => order.status === 'Order Placed').length,
-        in_transit: queue.filter((order: any) => ['Shipped', 'Out for Delivery'].includes(order.status)).length,
-        needs_attention: queue.filter((order: any) => order.needs_attention).length,
       },
     });
   }
@@ -241,28 +152,9 @@ export class OrdersService {
       fail('Order not found', 'order_not_found', HttpStatus.NOT_FOUND);
     }
 
-    const updates = await this.findUpdatesForOrder(order._id);
     return ok('Order loaded', {
-      order: serializeCustomerOrder(order, updates),
+      order: serializeCustomerOrder(order, await this.findUpdatesForOrder(order._id)),
       payment_gateway: this.buildDevGatewayConfig(order),
-      delivery_snapshot: this.buildDeliverySnapshot(order, updates),
-    });
-  }
-
-  async trackingForUser(user: any, orderId: string) {
-    const order = await this.findAccessibleOrder(user, orderId);
-    if (!order) {
-      fail('Order not found', 'order_not_found', HttpStatus.NOT_FOUND);
-    }
-    const updates = await this.findUpdatesForOrder(order._id);
-    return ok('Tracking loaded', {
-      order_id: asIdString(order._id),
-      tracking_code: order.tracking_code || '',
-      current_location: order.current_location || '',
-      status: order.status || 'Order Placed',
-      progress_percent: this.computeProgressPercent(String(order.status || 'Order Placed')),
-      timeline: updates,
-      delivery_snapshot: this.buildDeliverySnapshot(order, updates),
     });
   }
 
@@ -277,7 +169,7 @@ export class OrdersService {
     const crop = order.crop as any;
     const farmer = crop?.farmer as any;
     const customer = order.customer as any;
-    const unitPrice = Number(order.quantity || 0) > 0 ? Number(order.subtotal || order.total_price || 0) / Number(order.quantity || 1) : 0;
+    const unitPrice = Number(order.quantity || 0) > 0 ? Number(order.total_price || 0) / Number(order.quantity || 1) : 0;
 
     return ok('Invoice loaded', {
       order: serialized,
@@ -296,28 +188,10 @@ export class OrdersService {
             label: crop?.name || 'Crop order',
             quantity: Number(order.quantity || 0),
             unit_price: Number(unitPrice.toFixed(2)),
-            total: Number(order.subtotal || 0),
-          },
-          {
-            label: 'Delivery fee',
-            quantity: 1,
-            unit_price: Number(order.delivery_fee || 0),
-            total: Number(order.delivery_fee || 0),
-          },
-          {
-            label: 'Platform fee',
-            quantity: 1,
-            unit_price: Number(order.platform_fee || 0),
-            total: Number(order.platform_fee || 0),
-          },
-          {
-            label: 'Discount',
-            quantity: 1,
-            unit_price: Number(-(Number(order.discount_amount || 0))),
-            total: Number(-(Number(order.discount_amount || 0))),
+            total: Number(order.total_price || 0),
           },
         ],
-        subtotal: Number(order.subtotal || 0),
+        subtotal: Number(order.total_price || 0),
         grand_total: Number(order.total_price || 0),
         payment_status: order.payment_status || 'pending',
         payment_method: order.payment_method || '',
@@ -328,37 +202,8 @@ export class OrdersService {
         estimated_delivery: order.estimated_delivery || '',
         fulfillment_window: order.fulfillment_window || '',
         delivery_address: order.delivery_address || '',
-        requested_delivery_date: order.requested_delivery_date || '',
         tracking_code: order.tracking_code || '',
-        priority: order.priority || 'standard',
       },
-    });
-  }
-
-  async updateDeliveryAddress(customer: any, orderId: string, body: Record<string, unknown>) {
-    const order: any = await this.findCustomerOrder(orderId, customer, true);
-    if (!order) {
-      fail('Order not found', 'order_not_found', HttpStatus.NOT_FOUND);
-    }
-    if (!['Order Placed', 'Order Confirmed'].includes(String(order.status || ''))) {
-      fail('Delivery address can only be updated before dispatch.', 'delivery_address_locked');
-    }
-
-    const deliveryAddress = String(body.delivery_address || '').trim();
-    const fulfillmentWindow = String(body.fulfillment_window || order.fulfillment_window || '').trim();
-    const requestedDeliveryDate = String(body.requested_delivery_date || order.requested_delivery_date || '').trim();
-    if (!deliveryAddress) {
-      fail('Delivery address is required', 'delivery_address_required');
-    }
-
-    order.delivery_address = deliveryAddress;
-    order.fulfillment_window = fulfillmentWindow;
-    order.requested_delivery_date = requestedDeliveryDate;
-    await order.save();
-    await this.recordOrderUpdate(order._id, String(order.status || 'Order Confirmed'), order.current_location || '', 'Delivery details updated by customer', 'customer', order.estimated_delivery || '');
-
-    return ok('Delivery details updated', {
-      order: serializeCustomerOrder(order, await this.findUpdatesForOrder(order._id)),
     });
   }
 
@@ -374,7 +219,7 @@ export class OrdersService {
     order.status = 'Cancelled';
     order.payment_status = order.payment_status === 'confirmed' ? 'refunding' : 'cancelled';
     await order.save();
-    await this.recordOrderUpdate(order._id, 'Cancelled', 'System', 'Order cancelled by customer', 'customer', '');
+    await this.recordOrderUpdate(order._id, 'Cancelled', 'System');
 
     const cropDoc: any = await this.cropModel.findById(order.crop?._id || order.crop);
     if (cropDoc) {
@@ -409,7 +254,6 @@ export class OrdersService {
     order.payment_reference = paymentSession.reference;
     order.payment_gateway_details = paymentSession.gatewayDetails;
     order.status = order.status === 'Order Placed' ? 'Order Confirmed' : order.status;
-    order.confirmed_at = new Date();
     if (!order.invoice_number) {
       order.invoice_number = this.generateInvoiceNumber();
     }
@@ -417,7 +261,7 @@ export class OrdersService {
       order.tracking_code = this.generateTrackingCode();
     }
     await order.save();
-    await this.recordOrderUpdate(order._id, 'Order Confirmed', order.current_location || 'Payment confirmed', 'Payment approved on sandbox gateway', 'customer', order.estimated_delivery || '');
+    await this.recordOrderUpdate(order._id, 'Order Confirmed', order.current_location || 'Payment confirmed');
     await this.notifyCustomerPaymentConfirmed(order, customer);
 
     const farmerId = order.crop?.farmer?._id || order.crop?.farmer;
@@ -454,7 +298,6 @@ export class OrdersService {
     const newStatus = String(body.status || 'Order Confirmed');
     const location = String(body.location || '');
     const trackingCode = String(body.tracking_code || '');
-    const updateNote = String(body.note || '').trim();
 
     const order: any = await this.findFarmerOrder(orderId, farmer);
     if (!order) {
@@ -462,33 +305,27 @@ export class OrdersService {
     }
 
     const previousStatus = String(order.status || '');
-    assertAllowedOrderTransition(previousStatus, newStatus);
     order.status = newStatus;
     order.current_location = location || order.current_location || '';
     if (trackingCode) {
       order.tracking_code = trackingCode;
     }
-    if (newStatus === 'Shipped' && !order.dispatch_due_at) {
-      order.dispatch_due_at = new Date();
-    }
-    if (newStatus === 'Delivered') {
-      order.current_location = 'Delivered';
-    }
     await order.save();
-    await this.recordOrderUpdate(order._id, newStatus, location || order.current_location || '', updateNote || `Order moved to ${newStatus}`, 'farmer', order.estimated_delivery || '');
+    await this.recordOrderUpdate(order._id, newStatus, location || order.current_location || '');
 
     if (newStatus === 'Order Confirmed' && previousStatus !== 'Order Confirmed') {
       await this.notifyCustomerFarmerApproved(order);
     }
+    if (newStatus === 'Delivered') {
+      order.current_location = 'Delivered';
+      await order.save();
+    }
 
     await this.createNotification(order.customer?._id || order.customer, 'Order status updated', `Your order for ${order.crop?.name || 'a crop'} is now ${newStatus}.`, 'order', {
       order_id: asIdString(order._id),
-      status: newStatus,
     });
 
-    return ok(`Order #${asIdString(order._id)} status updated to ${newStatus}`, {
-      order: serializeFarmerDashboardOrder(order),
-    });
+    return ok(`Order #${asIdString(order._id)} status updated to ${newStatus}`);
   }
 
   async adminDashboard() {
@@ -505,7 +342,6 @@ export class OrdersService {
     const totalOrders = orders.length;
     const paidOrders = orders.filter((order: any) => order.payment_status === 'confirmed');
     const totalRevenue = paidOrders.reduce((sum: number, order: any) => sum + Number(order.total_price || 0), 0);
-    const bulkRevenue = paidOrders.filter((order: any) => order.is_bulk_order).reduce((sum: number, order: any) => sum + Number(order.total_price || 0), 0);
 
     const categoryCounter = new Map<string, number>();
     crops.forEach((crop: any) => {
@@ -514,16 +350,12 @@ export class OrdersService {
     });
 
     const revenueByDay = new Map<string, number>();
-    const statusCounter = new Map<string, number>();
     paidOrders.forEach((order: any) => {
-      if (order.order_date) {
-        const day = this.toKolkataDate(order.order_date);
-        revenueByDay.set(day, (revenueByDay.get(day) || 0) + Number(order.total_price || 0));
+      if (!order.order_date) {
+        return;
       }
-    });
-    orders.forEach((order: any) => {
-      const status = String(order.status || 'Order Placed');
-      statusCounter.set(status, (statusCounter.get(status) || 0) + 1);
+      const day = this.toKolkataDate(order.order_date);
+      revenueByDay.set(day, (revenueByDay.get(day) || 0) + Number(order.total_price || 0));
     });
 
     const revenueTrend = [...revenueByDay.entries()]
@@ -538,12 +370,9 @@ export class OrdersService {
       total_farmers: totalFarmers,
       total_crops: totalCrops,
       total_orders: totalOrders,
-      total_revenue: Number(totalRevenue.toFixed(2)),
-      bulk_revenue: Number(bulkRevenue.toFixed(2)),
+      total_revenue: totalRevenue,
       category_counts: [...categoryCounter.entries()],
       revenue_trend: revenueTrend,
-      status_counts: [...statusCounter.entries()],
-      urgent_orders: orders.filter((order: any) => order.priority === 'urgent').length,
     });
   }
 
@@ -556,13 +385,9 @@ export class OrdersService {
       fail('Order not found', 'order_not_found', HttpStatus.NOT_FOUND);
     }
     const statusValue = String(body.status || order.status);
-    assertAllowedOrderTransition(String(order.status || 'Order Placed'), statusValue);
     order.status = statusValue;
-    if (statusValue === 'Delivered') {
-      order.current_location = 'Delivered';
-    }
     await order.save();
-    await this.recordOrderUpdate(order._id, statusValue, order.current_location || 'Admin dashboard', 'Order updated by admin', 'admin', order.estimated_delivery || '');
+    await this.recordOrderUpdate(order._id, statusValue, order.current_location || 'Admin dashboard');
     return ok(`Order #${asIdString(order._id)} status updated to ${statusValue}`);
   }
 
@@ -620,8 +445,8 @@ export class OrdersService {
     return cropFarmerId === asIdString(farmer._id) ? order : null;
   }
 
-  private async recordOrderUpdate(orderId: unknown, status: string, location = '', note = '', actorRole = '', etaLabel = '') {
-    return this.orderUpdateModel.create({ order: orderId, status, location: location || '', note, actor_role: actorRole, eta_label: etaLabel });
+  private async recordOrderUpdate(orderId: unknown, status: string, location = '') {
+    return this.orderUpdateModel.create({ order: orderId, status, location: location || '' });
   }
 
   private async findUpdatesForOrder(orderId: unknown) {
@@ -644,12 +469,10 @@ export class OrdersService {
     return result;
   }
 
-  private estimateDelivery(customer: any, farmer: any, crop: any, priority = 'standard'): string {
+  private estimateDelivery(customer: any, farmer: any, crop: any): string {
     let days = 5;
-    if (crop?.same_day_available || priority === 'urgent') {
+    if (crop?.same_day_available) {
       days = 0;
-    } else if (priority === 'priority') {
-      days = 2;
     } else if (farmer.state && customer.state && farmer.state === customer.state) {
       days = 3;
       if (farmer.city && customer.city && farmer.city === customer.city) {
@@ -665,48 +488,6 @@ export class OrdersService {
       year: 'numeric',
       timeZone: 'Asia/Kolkata',
     }).format(targetDate);
-  }
-
-  private buildDeliverySnapshot(order: any, updates: any[]) {
-    return {
-      estimated_delivery: order.estimated_delivery || '',
-      requested_delivery_date: order.requested_delivery_date || '',
-      dispatch_due_at: order.dispatch_due_at || null,
-      current_location: order.current_location || '',
-      progress_percent: this.computeProgressPercent(String(order.status || 'Order Placed')),
-      latest_update: updates.length > 0 ? updates[updates.length - 1] : null,
-    };
-  }
-
-  private computeDispatchDueAt(priority: string, sameDayAvailable: boolean) {
-    const dueAt = new Date();
-    const hours = sameDayAvailable ? 4 : priority === 'urgent' ? 8 : priority === 'priority' ? 16 : 24;
-    dueAt.setHours(dueAt.getHours() + hours);
-    return dueAt;
-  }
-
-  private computeProgressPercent(status: string) {
-    const index = Math.max(ORDER_STAGES.indexOf(status), 0);
-    return Math.round((index / Math.max(ORDER_STAGES.length - 1, 1)) * 100);
-  }
-
-  private computeSlaBucket(order: any) {
-    if (!order.dispatch_due_at) {
-      return 'watch';
-    }
-    const dueAt = new Date(order.dispatch_due_at).getTime();
-    const delta = dueAt - Date.now();
-    if (delta <= 0) {
-      return 'breach';
-    }
-    if (delta <= 6 * 60 * 60 * 1000) {
-      return 'at_risk';
-    }
-    return 'healthy';
-  }
-
-  private orderNeedsAttention(order: any) {
-    return order.payment_status !== 'confirmed' || this.computeSlaBucket(order) !== 'healthy' || String(order.priority || '') === 'urgent';
   }
 
   private toKolkataDate(value: Date): string {
@@ -729,6 +510,13 @@ export class OrdersService {
       return 'Low Stock';
     }
     return 'Available';
+  }
+
+  private toBoolean(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
   }
 
   private buildDevGatewayConfig(order: any) {
@@ -852,9 +640,7 @@ export class OrdersService {
         `You have received a new order request for ${order.crop?.name}.`,
         `Quantity: ${order.quantity}`,
         `Buyer: ${customer.full_name || customer.username}`,
-        `Priority: ${order.priority || 'standard'}`,
-      ].join('
-'),
+      ].join('\n'),
     );
   }
 
@@ -871,8 +657,7 @@ export class OrdersService {
         `Payment for ${order.crop?.name} has been confirmed.`,
         `Invoice: ${order.invoice_number || ''}`,
         `Tracking code: ${order.tracking_code || ''}`,
-      ].join('
-'),
+      ].join('\n'),
     );
   }
 
@@ -889,8 +674,7 @@ export class OrdersService {
         '',
         `Your farmer has confirmed the order for ${order.crop?.name}.`,
         `Tracking code: ${order.tracking_code || ''}`,
-      ].join('
-'),
+      ].join('\n'),
     );
   }
 }

@@ -15,18 +15,6 @@ export class Order {
   @Prop({ type: Number, required: true, min: 0 })
   total_price!: number;
 
-  @Prop({ type: Number, default: 0, min: 0 })
-  subtotal!: number;
-
-  @Prop({ type: Number, default: 0, min: 0 })
-  delivery_fee!: number;
-
-  @Prop({ type: Number, default: 0, min: 0 })
-  platform_fee!: number;
-
-  @Prop({ type: Number, default: 0, min: 0 })
-  discount_amount!: number;
-
   @Prop({ default: 'Order Placed' })
   status!: string;
 
@@ -71,32 +59,9 @@ export class Order {
 
   @Prop({ default: '' })
   tracking_code!: string;
-
-  @Prop({ default: 'standard' })
-  priority!: string;
-
-  @Prop({ default: 'low' })
-  risk_band!: string;
-
-  @Prop({ default: '' })
-  requested_delivery_date!: string;
-
-  @Prop({ type: Date, default: null })
-  dispatch_due_at!: Date | null;
-
-  @Prop({ type: Date, default: null })
-  confirmed_at!: Date | null;
-
-  @Prop({ default: '' })
-  customer_phone!: string;
-
-  @Prop({ type: SchemaTypes.Mixed, default: {} })
-  delivery_snapshot!: Record<string, unknown>;
 }
 
 export type OrderDocument = HydratedDocument<Order>;
 export const OrderSchema = SchemaFactory.createForClass(Order);
 OrderSchema.index({ customer: 1, order_date: -1 });
 OrderSchema.index({ crop: 1, order_date: -1 });
-OrderSchema.index({ status: 1, order_date: -1 });
-OrderSchema.index({ priority: 1, payment_status: 1 });
