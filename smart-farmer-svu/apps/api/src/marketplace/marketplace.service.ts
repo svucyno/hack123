@@ -19,7 +19,6 @@ import { Order } from '../orders/schemas/order.schema';
 import { OrderUpdate } from '../orders/schemas/order-update.schema';
 import { Review } from '../reviews/schemas/review.schema';
 
-import { buildListingCode, buildSearchTerms, normalizeCropPayload, normalizeMarketplaceQuery } from './marketplace.validation';
 import { Crop } from './schemas/crop.schema';
 
 interface UploadedFile {
@@ -38,67 +37,19 @@ export class MarketplaceService {
     @InjectModel(OrderUpdate.name) private readonly orderUpdateModel: Model<OrderUpdate>,
   ) {}
 
-  async marketplaceFilters() {
-    const [districts, priceRange] = await Promise.all([
-      this.cropModel.distinct('district', { district: { $ne: '' } }),
-      this.cropModel.aggregate([
-        {
-          $group: {
-            _id: null,
-            min_price: { $min: '$price' },
-            max_price: { $max: '$price' },
-          },
-        },
-      ]),
-    ]);
-
-    return ok('Marketplace filters loaded', {
-      categories: MARKETPLACE_CATEGORIES,
-      states: MARKETPLACE_STATES,
-      districts: districts.filter(Boolean).sort(),
-      sort_options: [
-        { value: 'newest', label: 'Newest' },
-        { value: 'demand', label: 'Highest demand' },
-        { value: 'stock', label: 'Most stock' },
-        { value: 'price_low', label: 'Price: low to high' },
-        { value: 'price_high', label: 'Price: high to low' },
-      ],
-      toggles: ['verified_only', 'organic_only', 'same_day_only', 'available_only'],
-      price_range: {
-        min: Number(priceRange[0]?.min_price || 0),
-        max: Number(priceRange[0]?.max_price || 0),
-      },
-    });
-  }
-
-  async categorySummary() {
-    const summary = await this.cropModel.aggregate([
-      {
-        $group: {
-          _id: '$category',
-          count: { $sum: 1 },
-          avg_price: { $avg: '$price' },
-          organic_count: { $sum: { $cond: ['$organic', 1, 0] } },
-        },
-      },
-      { $sort: { count: -1, _id: 1 } },
-    ]);
-
-    return ok('Marketplace category summary loaded', {
-      categories: summary.map((item: any) => ({
-        category: String(item._id || 'Others'),
-        count: Number(item.count || 0),
-        avg_price: Number(Number(item.avg_price || 0).toFixed(2)),
-        organic_count: Number(item.organic_count || 0),
-      })),
-    });
-  }
-
   async listCrops(queryParams: Record<string, unknown>) {
-    const filters = normalizeMarketplaceQuery(queryParams);
-    const filter: Record<string, any> = {};
-    if (filters.query) {
-      const regex = new RegExp(this.escapeRegex(filters.query), 'i');
+    const query = String(queryParams.query || '').trim();
+    const state = String(queryParams.state || '').trim();
+    const district = String(queryParams.district || '').trim();
+    const category = String(queryParams.category || '').trim();
+    const sort = String(queryParams.sort || 'newest').trim();
+    const verifiedOnly = this.toBoolean(queryParams.verified_only);
+    const priceMin = this.toNumber(queryParams.price_min, NaN);
+    const priceMax = this.toNumber(queryParams.price_max, NaN);
+
+    const filter: Record<string, unknown> = {};
+    if (query) {
+      const regex = new RegExp(this.escapeRegex(query), 'i');
       filter.$or = [
         { name: regex },
         { description: regex },
@@ -106,58 +57,40 @@ export class MarketplaceService {
         { district: regex },
         { state: regex },
         { tags: regex },
-        { search_terms: regex },
-        { listing_code: regex },
       ];
     }
-    if (filters.state) {
-      filter.state = filters.state;
+    if (state) {
+      filter.state = state;
     }
-    if (filters.district) {
-      filter.district = filters.district;
+    if (district) {
+      filter.district = district;
     }
-    if (filters.category) {
-      filter.category = filters.category;
+    if (category) {
+      filter.category = category;
     }
-    if (filters.organicOnly) {
-      filter.organic = true;
-    }
-    if (filters.sameDayOnly) {
-      filter.same_day_available = true;
-    }
-    if (filters.availableOnly) {
-      filter.stock_status = { $ne: 'Out of Stock' };
-    }
-    if (filters.priceMin !== null || filters.priceMax !== null) {
+    if (Number.isFinite(priceMin) || Number.isFinite(priceMax)) {
       filter.price = {};
-      if (filters.priceMin !== null) {
-        filter.price.$gte = filters.priceMin;
+      if (Number.isFinite(priceMin)) {
+        (filter.price as Record<string, number>).$gte = priceMin;
       }
-      if (filters.priceMax !== null) {
-        filter.price.$lte = filters.priceMax;
+      if (Number.isFinite(priceMax)) {
+        (filter.price as Record<string, number>).$lte = priceMax;
       }
     }
 
     const sortBy: Record<string, 1 | -1> =
-      filters.sort === 'price_low'
+      sort === 'price_low'
         ? { price: 1, created_at: -1 }
-        : filters.sort === 'price_high'
+        : sort === 'price_high'
           ? { price: -1, created_at: -1 }
-          : filters.sort === 'demand'
+          : sort === 'demand'
             ? { demand_score: -1, created_at: -1 }
-            : filters.sort === 'stock'
+            : sort === 'stock'
               ? { quantity: -1, created_at: -1 }
               : { created_at: -1 };
 
-    const totalResults = await this.cropModel.countDocuments(filter);
-    let crops: any[] = await this.cropModel
-      .find(filter)
-      .sort(sortBy)
-      .skip((filters.page - 1) * filters.perPage)
-      .limit(filters.perPage)
-      .populate('farmer');
-
-    if (filters.verifiedOnly) {
+    let crops: any[] = await this.cropModel.find(filter).sort(sortBy).populate('farmer');
+    if (verifiedOnly) {
       crops = crops.filter((crop: any) => Boolean(crop.farmer?.is_verified));
     }
 
@@ -194,31 +127,19 @@ export class MarketplaceService {
         { value: 'price_high', label: 'Price: high to low' },
       ],
       stats: {
-        total_results: totalResults,
-        visible_results: serialized.length,
+        total_results: serialized.length,
         verified_results: serialized.filter((crop: any) => Boolean(crop.is_verified)).length,
         organic_results: serialized.filter((crop: any) => Boolean(crop.organic)).length,
-        same_day_results: serialized.filter((crop: any) => Boolean(crop.same_day_available)).length,
-      },
-      pagination: {
-        page: filters.page,
-        per_page: filters.perPage,
-        total_results: totalResults,
-        total_pages: Math.max(1, Math.ceil(totalResults / filters.perPage)),
-        has_next: filters.page * filters.perPage < totalResults,
       },
       filters: {
-        query: filters.query,
-        state: filters.state,
-        district: filters.district,
-        category: filters.category,
-        verified_only: filters.verifiedOnly,
-        organic_only: filters.organicOnly,
-        same_day_only: filters.sameDayOnly,
-        available_only: filters.availableOnly,
-        price_min: filters.priceMin,
-        price_max: filters.priceMax,
-        sort: filters.sort,
+        query,
+        state,
+        district,
+        category,
+        verified_only: verifiedOnly,
+        price_min: Number.isFinite(priceMin) ? priceMin : null,
+        price_max: Number.isFinite(priceMax) ? priceMax : null,
+        sort,
       },
     });
   }
@@ -335,65 +256,34 @@ export class MarketplaceService {
       fail('Quality proof too large (Max 2MB)', 'proof_too_large');
     }
 
-    const normalized = normalizeCropPayload(body, {
-      state: user.state,
-      district: user.district,
-      pincode: user.pincode,
-      category: 'Others',
-      unit: 'kg',
-      quality: 'Standard',
-      price_trend: 'Stable',
-      demand_score: 50,
-      delivery_radius_km: 30,
-    });
-
-    if (!normalized.name || normalized.name.length < 2) {
-      await this.cleanupUploadedFiles(files);
-      fail('Crop name must be at least 2 characters', 'invalid_crop_name');
-    }
-    if (normalized.quantity <= 0) {
-      await this.cleanupUploadedFiles(files);
-      fail('Quantity must be greater than zero', 'invalid_crop_quantity');
-    }
-    if (normalized.price <= 0) {
-      await this.cleanupUploadedFiles(files);
-      fail('Price must be greater than zero', 'invalid_crop_price');
-    }
-    if (normalized.min_order_quantity > normalized.quantity) {
-      await this.cleanupUploadedFiles(files);
-      fail('Minimum order quantity cannot exceed total quantity', 'invalid_min_order_quantity');
-    }
-
-    const listingCode = buildListingCode(normalized.name, asIdString(user._id));
-    const searchTerms = buildSearchTerms(normalized);
+    const quantity = this.toNumber(body.quantity);
+    const minOrderQuantity = Math.max(this.toNumber(body.min_order_quantity, 1), 0.1);
     const crop = await this.cropModel.create({
       farmer: user._id,
-      name: normalized.name,
-      category: normalized.category,
-      listing_code: listingCode,
-      search_terms: searchTerms,
-      quantity: normalized.quantity,
-      price: normalized.price,
-      harvest_date: this.toDate(normalized.harvest_date),
-      state: normalized.state || String(user.state || ''),
-      district: normalized.district || String(user.district || ''),
-      village: normalized.village,
-      pincode: normalized.pincode || String(user.pincode || ''),
-      description: normalized.description,
-      quality: normalized.quality,
+      name: String(body.name || ''),
+      category: String(body.category || 'Others'),
+      quantity,
+      price: this.toNumber(body.price),
+      harvest_date: this.toDate(body.harvest_date),
+      state: String(body.state || user.state || ''),
+      district: String(body.district || user.district || ''),
+      village: String(body.village || ''),
+      pincode: String(body.pincode || user.pincode || ''),
+      description: String(body.description || ''),
+      quality: String(body.quality || 'Standard'),
       image: this.relativeUploadPath(image),
       quality_proof: this.relativeUploadPath(qualityProof),
-      unit: normalized.unit,
-      min_order_quantity: normalized.min_order_quantity,
-      same_day_available: normalized.same_day_available,
-      organic: normalized.organic,
-      demand_score: normalized.demand_score,
-      price_trend: normalized.price_trend,
-      stock_status: this.computeStockStatus(normalized.quantity, normalized.min_order_quantity),
-      latitude: normalized.latitude,
-      longitude: normalized.longitude,
-      delivery_radius_km: normalized.delivery_radius_km,
-      tags: normalized.tags,
+      unit: String(body.unit || 'kg'),
+      min_order_quantity: minOrderQuantity,
+      same_day_available: this.toBoolean(body.same_day_available),
+      organic: this.toBoolean(body.organic),
+      demand_score: this.toNumber(body.demand_score, 50),
+      price_trend: String(body.price_trend || 'Stable'),
+      stock_status: this.computeStockStatus(quantity, minOrderQuantity),
+      latitude: this.toNullableNumber(body.latitude),
+      longitude: this.toNullableNumber(body.longitude),
+      delivery_radius_km: this.toNumber(body.delivery_radius_km, 30),
+      tags: this.parseTags(body.tags),
     });
 
     const populatedCrop = await this.cropModel.findById(crop._id).populate('farmer');
@@ -428,48 +318,26 @@ export class MarketplaceService {
 
     const previousImage = String(crop.image || '');
     const previousProof = String(crop.quality_proof || '');
-    const normalized = normalizeCropPayload(body, crop.toObject ? crop.toObject() : crop);
 
-    if (!normalized.name || normalized.name.length < 2) {
-      await this.cleanupUploadedFiles(files);
-      fail('Crop name must be at least 2 characters', 'invalid_crop_name');
-    }
-    if (normalized.quantity <= 0) {
-      await this.cleanupUploadedFiles(files);
-      fail('Quantity must be greater than zero', 'invalid_crop_quantity');
-    }
-    if (normalized.price <= 0) {
-      await this.cleanupUploadedFiles(files);
-      fail('Price must be greater than zero', 'invalid_crop_price');
-    }
-    if (normalized.min_order_quantity > normalized.quantity) {
-      await this.cleanupUploadedFiles(files);
-      fail('Minimum order quantity cannot exceed total quantity', 'invalid_min_order_quantity');
-    }
-
-    crop.name = normalized.name;
-    crop.category = normalized.category;
-    crop.listing_code = crop.listing_code || buildListingCode(normalized.name, asIdString(user._id));
-    crop.search_terms = buildSearchTerms(normalized);
-    crop.quantity = normalized.quantity;
-    crop.price = normalized.price;
-    crop.harvest_date = this.toDate(normalized.harvest_date);
-    crop.description = normalized.description;
-    crop.state = normalized.state || crop.state || '';
-    crop.district = normalized.district || crop.district || '';
-    crop.village = normalized.village;
-    crop.pincode = normalized.pincode || crop.pincode || '';
-    crop.unit = normalized.unit;
-    crop.min_order_quantity = normalized.min_order_quantity;
-    crop.same_day_available = normalized.same_day_available;
-    crop.organic = normalized.organic;
-    crop.demand_score = normalized.demand_score;
-    crop.price_trend = normalized.price_trend;
-    crop.quality = normalized.quality;
-    crop.latitude = normalized.latitude;
-    crop.longitude = normalized.longitude;
-    crop.delivery_radius_km = normalized.delivery_radius_km;
-    crop.tags = normalized.tags;
+    if (body.name !== undefined) crop.name = String(body.name || crop.name);
+    if (body.category !== undefined) crop.category = String(body.category || crop.category);
+    if (body.quantity !== undefined) crop.quantity = this.toNumber(body.quantity, crop.quantity);
+    if (body.price !== undefined) crop.price = this.toNumber(body.price, crop.price);
+    if (body.description !== undefined) crop.description = String(body.description || '');
+    if (body.state !== undefined) crop.state = String(body.state || crop.state || '');
+    if (body.district !== undefined) crop.district = String(body.district || crop.district || '');
+    if (body.village !== undefined) crop.village = String(body.village || crop.village || '');
+    if (body.pincode !== undefined) crop.pincode = String(body.pincode || crop.pincode || '');
+    if (body.unit !== undefined) crop.unit = String(body.unit || crop.unit || 'kg');
+    if (body.min_order_quantity !== undefined) crop.min_order_quantity = Math.max(this.toNumber(body.min_order_quantity, crop.min_order_quantity || 1), 0.1);
+    if (body.same_day_available !== undefined) crop.same_day_available = this.toBoolean(body.same_day_available);
+    if (body.organic !== undefined) crop.organic = this.toBoolean(body.organic);
+    if (body.demand_score !== undefined) crop.demand_score = this.toNumber(body.demand_score, crop.demand_score || 50);
+    if (body.price_trend !== undefined) crop.price_trend = String(body.price_trend || crop.price_trend || 'Stable');
+    if (body.latitude !== undefined) crop.latitude = this.toNullableNumber(body.latitude);
+    if (body.longitude !== undefined) crop.longitude = this.toNullableNumber(body.longitude);
+    if (body.delivery_radius_km !== undefined) crop.delivery_radius_km = this.toNumber(body.delivery_radius_km, crop.delivery_radius_km || 30);
+    if (body.tags !== undefined) crop.tags = this.parseTags(body.tags);
     if (image) {
       crop.image = this.relativeUploadPath(image);
     }
@@ -521,7 +389,7 @@ export class MarketplaceService {
   }
 
   private escapeRegex(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\]/g, '\$&');
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private toDate(value: unknown): Date | null {
@@ -531,6 +399,33 @@ export class MarketplaceService {
     }
     const date = new Date(text);
     return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  private toNumber(value: unknown, fallback = 0): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private toNullableNumber(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private toBoolean(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+  }
+
+  private parseTags(value: unknown): string[] {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+    return String(value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   private computeStockStatus(quantity: number, minOrderQuantity: number): string {
