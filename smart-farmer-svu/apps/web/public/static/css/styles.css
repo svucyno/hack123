@@ -2782,3 +2782,92 @@ button {
         padding: 1.8rem 1rem;
     }
 }
+
+
+.auth-form-banner {
+    border: 1px solid rgba(209, 85, 77, 0.2);
+    background: rgba(248, 222, 218, 0.9);
+    color: #a33b33;
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.helper-text {
+    margin-top: 0.45rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: rgba(16, 33, 22, 0.56);
+}
+
+.field-error {
+    color: #b5443d;
+}
+
+.input-shell.is-invalid,
+.select-shell.is-invalid,
+textarea.is-invalid {
+    border-color: rgba(209, 85, 77, 0.52) !important;
+    box-shadow: 0 0 0 4px rgba(209, 85, 77, 0.08);
+    background: rgba(255, 247, 246, 0.96);
+}
+
+.auth-strength {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+}
+
+.auth-strength-bar {
+    position: relative;
+    height: 0.46rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(16, 33, 22, 0.08);
+}
+
+.auth-strength-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    transition: width 0.2s ease, background 0.2s ease;
+    background: rgba(16, 33, 22, 0.18);
+}
+
+.auth-strength.is-weak .auth-strength-bar span {
+    background: #d1554d;
+}
+
+.auth-strength.is-fair .auth-strength-bar span {
+    background: #d28f2a;
+}
+
+.auth-strength.is-good .auth-strength-bar span {
+    background: #89a93d;
+}
+
+.auth-strength.is-strong .auth-strength-bar span {
+    background: #2f9e5b;
+}
+
+.auth-checklist {
+    margin: 0;
+    padding-left: 1rem;
+    display: grid;
+    gap: 0.24rem;
+    color: rgba(16, 33, 22, 0.58);
+    font-size: 0.78rem;
+}
+
+.btn-primary-app.is-loading {
+    pointer-events: none;
+    opacity: 0.88;
+}
+
+.otp-box {
+    letter-spacing: 0.22em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}

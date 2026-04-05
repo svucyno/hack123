@@ -259,7 +259,9 @@
         </div>
         {% endif %}
 
-        <form id="{% if mode == 'verify' %}verify-form{% elif mode == 'login' %}login-form{% elif mode == 'forgot_password' %}forgot-form{% elif mode == 'reset_verify' %}reset-verify-form{% elif mode == 'reset_password' %}reset-password-form{% else %}register-form{% endif %}" action="{{ form_action }}" method="POST" class="space-y-4"
+        <form id="{% if mode == 'verify' %}verify-form{% elif mode == 'login' %}login-form{% elif mode == 'forgot_password' %}forgot-form{% elif mode == 'reset_verify' %}reset-verify-form{% elif mode == 'reset_password' %}reset-password-form{% else %}register-form{% endif %}" action="{{ form_action }}" method="POST" class="space-y-4" novalidate
+            data-auth-form
+            data-auth-mode="{{ mode }}"
             data-auth-a11y-form
             data-a11y-read-unsupported="{{ t('auth.accessibility.read_unsupported', 'Read aloud is not supported in this browser.') }}"
             data-a11y-read-empty="{{ t('auth.accessibility.read_empty', 'No field guidance is available to read aloud.') }}"
@@ -275,23 +277,22 @@
             data-a11y-speak-success="{{ t('auth.accessibility.speak_success', 'Speech added to the field.') }}"
             data-a11y-select-field="{{ t('auth.accessibility.select_field', 'Select a field first.') }}"
             data-a11y-selection-started="{{ t('auth.accessibility.selection_started', 'Reading selected text.') }}">
-            {% if next_path %}
-            <input type="hidden" name="next" value="{{ next_path }}">
-            {% endif %}
+            <div class="auth-form-banner hidden" data-auth-form-error role="alert"></div>
             {% if mode == 'login' %}
             <div>
                 <label class="field-label" for="email">{{ t('auth.login.email', 'Registered email') }}</label>
-                <input id="email" class="input-shell" type="email" name="email" data-auth-a11y-field placeholder="{{ t('auth.login.email_placeholder', 'farmer@example.com') }}"
+                <input id="email" class="input-shell" type="email" name="email" data-auth-a11y-field data-auth-validate="email" autocapitalize="none" spellcheck="false" autocomplete="email" placeholder="{{ t('auth.login.email_placeholder', 'farmer@example.com') }}"
                     required>
+                <p class="helper-text" data-field-note-for="email">Use the email linked to your Smart Farmer account.</p>
             </div>
 
             <div>
                 <div class="flex items-center justify-between gap-3">
                     <label class="field-label mb-0" for="login-password">{{ t('auth.login.password', 'Password') }}</label>
-                    <a href="{{ forgot_password_href or url_for('forgot_password') }}" class="text-sm font-bold text-leaf">{{ t('auth.login.forgot_password', 'Forgot password?') }}</a>
+                    <a href="{{ url_for('forgot_password') }}" class="text-sm font-bold text-leaf">{{ t('auth.login.forgot_password', 'Forgot password?') }}</a>
                 </div>
                 <div class="auth-password-wrap mt-2">
-                    <input id="login-password" class="input-shell pr-12" type="password" name="password" data-auth-a11y-field
+                    <input id="login-password" class="input-shell pr-12" type="password" name="password" data-auth-a11y-field data-auth-validate="password" minlength="8" autocomplete="current-password"
                         placeholder="{{ t('auth.login.password_placeholder', 'Enter your password') }}" required>
                     <button type="button" data-password-toggle="login-password"
                         class="field-action-button auth-password-toggle"
@@ -301,14 +302,14 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn-primary-app w-full">
+            <button type="submit" class="btn-primary-app w-full" data-auth-submit data-loading-label="Checking account">
                 <span class="control-label">{{ t('auth.login.continue', 'Continue to OTP') }}</span>
                 <i class="fa-solid fa-arrow-right control-icon"></i>
             </button>
             {% elif mode in ['verify', 'reset_verify'] %}
             <div>
                 <label class="field-label" for="email_verify">{{ t('auth.verify.email', 'Registered email') }}</label>
-                <input id="email_verify" class="input-shell bg-mist/80 text-ink/70" type="email" name="email" data-auth-a11y-field
+                <input id="email_verify" class="input-shell bg-mist/80 text-ink/70" type="email" name="email" data-auth-a11y-field data-auth-validate="email"
                     value="{{ email }}" readonly required>
             </div>
 
@@ -325,8 +326,9 @@
                 </div>
                 <div class="mt-4">
                     <label class="field-label" for="otp_input">{{ t('auth.verify.otp_label', 'Enter OTP') }}</label>
-                    <input id="otp_input" class="input-shell otp-box" type="text" name="otp" maxlength="6" data-auth-a11y-field
+                    <input id="otp_input" class="input-shell otp-box" type="text" name="otp" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" data-auth-a11y-field data-auth-validate="otp" data-otp-input
                         placeholder="{{ t('auth.verify.otp_placeholder', '000000') }}" required disabled>
+                    <p class="helper-text" data-field-note-for="otp_input">Enter the 6 digits exactly as received in email.</p>
                 </div>
                 <p id="otp_status" class="mt-3 text-sm text-ink/60">
                     {% if mode == 'verify' %}
@@ -345,7 +347,7 @@
                 </button>
             </div>
 
-            <button id="verify-submit-btn" type="submit" class="btn-primary-app w-full" disabled>
+            <button id="verify-submit-btn" type="submit" class="btn-primary-app w-full" data-auth-submit data-loading-label="Verifying code" disabled>
                 {% if mode == 'verify' %}
                 {{ t('auth.verify.submit', 'Complete sign in') }}
                 {% else %}
@@ -356,11 +358,11 @@
             {% elif mode == 'forgot_password' %}
             <div>
                 <label class="field-label" for="forgot-email">{{ t('auth.forgot.email', 'Registered email') }}</label>
-                <input id="forgot-email" class="input-shell" type="email" name="email" data-auth-a11y-field placeholder="{{ t('auth.forgot.email_placeholder', 'farmer@example.com') }}" required>
+                <input id="forgot-email" class="input-shell" type="email" name="email" data-auth-a11y-field data-auth-validate="email" autocapitalize="none" spellcheck="false" autocomplete="email" placeholder="{{ t('auth.forgot.email_placeholder', 'farmer@example.com') }}" required>
                 <p class="helper-text">{{ t('auth.forgot.helper', 'Password reset email will be sent only to your registered address.') }}</p>
             </div>
 
-            <button type="submit" class="btn-primary-app w-full">
+            <button type="submit" class="btn-primary-app w-full" data-auth-submit data-loading-label="Starting reset">
                 {{ t('auth.forgot.submit', 'Continue to reset OTP') }}
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
@@ -372,18 +374,22 @@
             <div>
                 <label class="field-label" for="reset-password">{{ t('auth.reset_password.new_password', 'New password') }}</label>
                 <div class="auth-password-wrap">
-                    <input id="reset-password" class="input-shell pr-12" type="password" name="password" data-auth-a11y-field placeholder="{{ t('auth.reset_password.new_password_placeholder', 'Create a strong password') }}" required>
+                    <input id="reset-password" class="input-shell pr-12" type="password" name="password" data-auth-a11y-field data-auth-validate="password" data-password-strength-target="reset-password-strength" minlength="8" autocomplete="new-password" placeholder="{{ t('auth.reset_password.new_password_placeholder', 'Create a strong password') }}" required>
                     <button type="button" data-password-toggle="reset-password"
                         class="field-action-button auth-password-toggle"
                         aria-label="{{ t('auth.accessibility.toggle_password', 'Show or hide password') }}">
                         <i class="fa-solid fa-eye"></i>
                     </button>
                 </div>
+                <div class="auth-strength" id="reset-password-strength" data-password-strength>
+                    <div class="auth-strength-bar"><span data-password-strength-fill></span></div>
+                    <p class="helper-text" data-password-strength-text>Use 8+ characters with letters and numbers.</p>
+                </div>
             </div>
             <div>
                 <label class="field-label" for="confirm-password">{{ t('auth.reset_password.confirm_password', 'Confirm new password') }}</label>
                 <div class="auth-password-wrap">
-                    <input id="confirm-password" class="input-shell pr-12" type="password" name="confirm_password" data-auth-a11y-field placeholder="{{ t('auth.reset_password.confirm_password_placeholder', 'Re-enter the new password') }}" required>
+                    <input id="confirm-password" class="input-shell pr-12" type="password" name="confirm_password" data-auth-a11y-field data-auth-validate="confirm_password" autocomplete="new-password" placeholder="{{ t('auth.reset_password.confirm_password_placeholder', 'Re-enter the new password') }}" required>
                     <button type="button" data-password-toggle="confirm-password"
                         class="field-action-button auth-password-toggle"
                         aria-label="{{ t('auth.accessibility.toggle_password', 'Show or hide password') }}">
@@ -392,7 +398,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn-primary-app w-full">
+            <button type="submit" class="btn-primary-app w-full" data-auth-submit data-loading-label="Updating password">
                 {{ t('auth.reset_password.submit', 'Update password') }}
                 <i class="fa-solid fa-key"></i>
             </button>
@@ -400,12 +406,13 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label class="field-label" for="full_name">{{ t('auth.register.full_name', 'Full name') }}</label>
-                    <input id="full_name" class="input-shell" type="text" name="full_name" data-auth-a11y-field
+                    <input id="full_name" class="input-shell" type="text" name="full_name" data-auth-a11y-field data-auth-validate="full_name" autocomplete="name"
                         placeholder="{{ t('auth.register.full_name_placeholder', 'Mahesh Reddy') }}" required>
+                    <p class="helper-text sm:col-span-2" data-field-note-for="full_name">Use your real name so orders and invoices stay consistent.</p>
                 </div>
                 <div class="sm:col-span-2">
                     <label class="field-label" for="email_register">{{ t('auth.register.email', 'Email address') }}</label>
-                    <input id="email_register" class="input-shell" type="email" name="email" data-auth-a11y-field
+                    <input id="email_register" class="input-shell" type="email" name="email" data-auth-a11y-field data-auth-validate="email" autocapitalize="none" spellcheck="false" autocomplete="email"
                         placeholder="{{ t('auth.register.email_placeholder', 'mahesh@example.com') }}" required>
                 </div>
                 <div>
@@ -417,7 +424,7 @@
                 </div>
                 <div>
                     <label class="field-label" for="city">{{ t('auth.register.city', 'City') }}</label>
-                    <input id="city" class="input-shell" type="text" name="city" data-auth-a11y-field placeholder="{{ t('auth.register.city_placeholder', 'Hyderabad') }}" required>
+                    <input id="city" class="input-shell" type="text" name="city" data-auth-a11y-field data-auth-validate="city" autocomplete="address-level2" placeholder="{{ t('auth.register.city_placeholder', 'Hyderabad') }}" required>
                 </div>
                 <div>
                     <label class="field-label" for="state">{{ t('auth.register.state', 'State') }}</label>
@@ -429,17 +436,18 @@
                 </div>
                 <div>
                     <label class="field-label" for="pincode">{{ t('auth.register.pincode', 'Pincode') }}</label>
-                    <input id="pincode" class="input-shell" type="text" name="pincode" data-auth-a11y-field placeholder="{{ t('auth.register.pincode_placeholder', '500001') }}">
+                    <input id="pincode" class="input-shell" type="text" name="pincode" data-auth-a11y-field data-auth-validate="pincode" inputmode="numeric" maxlength="6" placeholder="{{ t('auth.register.pincode_placeholder', '500001') }}">
                 </div>
                 <div class="sm:col-span-2">
                     <label class="field-label" for="username">{{ t('auth.register.username', 'Username') }}</label>
-                    <input id="username" class="input-shell" type="text" name="username" data-auth-a11y-field placeholder="{{ t('auth.register.username_placeholder', 'smartmahesh') }}"
+                    <input id="username" class="input-shell" type="text" name="username" data-auth-a11y-field data-auth-validate="username" minlength="4" maxlength="24" autocapitalize="none" spellcheck="false" placeholder="{{ t('auth.register.username_placeholder', 'smartmahesh') }}"
                         required>
+                    <p class="helper-text sm:col-span-2" data-field-note-for="username">Use 4 to 24 characters. Letters, numbers, dots, dashes, and underscores work best.</p>
                 </div>
                 <div class="sm:col-span-2">
                     <label class="field-label" for="register-password">{{ t('auth.register.password', 'Password') }}</label>
                     <div class="auth-password-wrap">
-                        <input id="register-password" class="input-shell pr-12" type="password" name="password" data-auth-a11y-field
+                        <input id="register-password" class="input-shell pr-12" type="password" name="password" data-auth-a11y-field data-auth-validate="password" data-password-strength-target="register-password-strength" minlength="8" autocomplete="new-password"
                             placeholder="{{ t('auth.register.password_placeholder', 'Create a strong password') }}" required>
                         <button type="button" data-password-toggle="register-password"
                             class="field-action-button auth-password-toggle"
@@ -447,10 +455,19 @@
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
+                    <div class="auth-strength sm:col-span-2" id="register-password-strength" data-password-strength>
+                        <div class="auth-strength-bar"><span data-password-strength-fill></span></div>
+                        <p class="helper-text" data-password-strength-text>Use 8+ characters with at least one letter and one number.</p>
+                        <ul class="auth-checklist">
+                            <li>At least 8 characters</li>
+                            <li>At least one letter</li>
+                            <li>At least one number</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
-            <button type="submit" class="btn-primary-app w-full">
+            <button type="submit" class="btn-primary-app w-full" data-auth-submit data-loading-label="Creating account">
                 {{ t('auth.register.submit', 'Create account') }}
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
@@ -460,19 +477,19 @@
         <div class="auth-inline-note mt-6 rounded-[1.2rem] border border-soil/8 bg-white/60 px-4 py-3.5 text-sm text-ink/68">
             {% if mode == 'login' %}
             <span class="control-label">{{ t('auth.login.new_user', 'New to Smart Farmer?') }}</span>
-            <a href="{{ register_href or url_for('register') }}" class="font-bold text-leaf"><span class="control-label">{{ t('auth.login.create_account', 'Create an account') }}</span></a>
+            <a href="{{ url_for('register') }}" class="font-bold text-leaf"><span class="control-label">{{ t('auth.login.create_account', 'Create an account') }}</span></a>
             {% elif mode == 'register' %}
             {{ t('auth.register.registered', 'Already registered?') }}
-            <a href="{{ login_href or url_for('login') }}" class="font-bold text-leaf">{{ t('auth.register.sign_in', 'Go to sign in') }}</a>
+            <a href="{{ url_for('login') }}" class="font-bold text-leaf">{{ t('auth.register.sign_in', 'Go to sign in') }}</a>
             {% elif mode == 'forgot_password' %}
             {{ t('auth.forgot.remembered', 'Remembered your password?') }}
-            <a href="{{ login_href or url_for('login') }}" class="font-bold text-leaf">{{ t('auth.forgot.back_to_login', 'Go to sign in') }}</a>
+            <a href="{{ url_for('login') }}" class="font-bold text-leaf">{{ t('auth.forgot.back_to_login', 'Go to sign in') }}</a>
             {% elif mode in ['reset_verify', 'reset_password'] %}
             {{ t('auth.reset_password.start_again', 'Need to use a different email?') }}
             <a href="{{ url_for('forgot_password') }}" class="font-bold text-leaf">{{ t('auth.reset_password.request_again', 'Start again') }}</a>
             {% else %}
             {{ t('auth.register.registered', 'Already registered?') }}
-            <a href="{{ login_href or url_for('login') }}" class="font-bold text-leaf">{{ t('auth.register.sign_in', 'Go to sign in') }}</a>
+            <a href="{{ url_for('login') }}" class="font-bold text-leaf">{{ t('auth.register.sign_in', 'Go to sign in') }}</a>
             {% endif %}
         </div>
     </div>

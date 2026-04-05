@@ -15,7 +15,19 @@ import {
   type SessionUser,
 } from "@/lib/auth";
 import { COOKIE_NAMES } from "@/lib/cookies";
-import { redirect, redirectWithFlash, sanitizeNextUrl } from "@/lib/http";
+import { redirect, redirectWithFlash } from "@/lib/http";
+import {
+  normalizeEmail,
+  normalizeHumanName,
+  normalizeOtp,
+  normalizePincode,
+  normalizeUsername,
+  validateEmailAddress,
+  validateLoginPayload,
+  validateOtpCode,
+  validatePasswordResetPayload,
+  validateRegisterPayload,
+} from "@/lib/auth-validation";
 import { normalizeLanguage } from "@/lib/language";
 import { renderTemplate } from "@/lib/template";
 
@@ -33,69 +45,37 @@ function applyPreferredLanguage(response: NextResponse, user?: SessionUser | nul
   });
 }
 
-function defaultPostAuthPath(user?: SessionUser | null): string {
-  if (!user) {
-    return "/";
-  }
-  if (user.role === "farmer") {
-    return "/farmer/dashboard";
-  }
-  if (user.role === "admin") {
-    return "/admin/dashboard";
-  }
-  return "/marketplace";
-}
-
-function getRequestedNextPath(request: NextRequest, fallback?: string | null): string {
-  const fromQuery = sanitizeNextUrl(request.nextUrl.searchParams.get("next"));
-  const fromFallback = sanitizeNextUrl(fallback || "/");
-  return fromQuery !== "/" ? fromQuery : fromFallback;
-}
-
-function buildAuthHref(pathname: string, nextPath: string): string {
-  return nextPath && nextPath !== "/" ? `${pathname}?next=${encodeURIComponent(nextPath)}` : pathname;
-}
-
-function buildAuthTemplateContext(request: NextRequest, mode: string, formAction: string, extra: Record<string, unknown> = {}) {
-  const nextPath = getRequestedNextPath(request);
-  return {
-    mode,
-    form_action: formAction,
-    next_path: nextPath !== "/" ? nextPath : "",
-    login_href: buildAuthHref("/login", nextPath),
-    register_href: buildAuthHref("/register", nextPath),
-    forgot_password_href: buildAuthHref("/forgot_password", nextPath),
-    ...extra,
-  };
-}
-
 export async function loginPage(request: NextRequest): Promise<NextResponse> {
   const session = getSessionState(request);
   if (session.user) {
     return redirect(request, "/");
   }
-  return renderTemplate(request, "auth.html", buildAuthTemplateContext(request, "login", "/login"), "login");
+  return renderTemplate(request, "auth.html", { mode: "login", form_action: "/login" }, "login");
 }
 
 export async function loginAction(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData();
+  const email = normalizeEmail(getString(formData, "email"));
+  const password = getString(formData, "password");
+  const loginValidationError = validateLoginPayload({ email, password });
+  if (loginValidationError) {
+    return redirectWithFlash(request, "/login", "error", loginValidationError);
+  }
   const { response, data } = await apiFetch("/api/auth/login/", {
     method: "POST",
     body: {
-      email: getString(formData, "email"),
-      password: getString(formData, "password"),
+      email,
+      password,
     },
   });
   if (!response.ok || !data.success) {
     return redirectWithFlash(request, "/login", "error", String(data.message || "Invalid email or password"));
   }
-  const nextPath = sanitizeNextUrl(getString(formData, "next"));
-  const next = redirect(request, buildAuthHref("/verify", nextPath));
+  const next = redirect(request, "/verify");
   setPreAuth(next, {
     challengeId: String(data.challenge_id),
-    email: String(data.email || getString(formData, "email")),
+    email: String(data.email || email),
     purpose: String(data.purpose || "login"),
-    redirectTo: nextPath !== "/" ? nextPath : undefined,
   });
   return next;
 }
@@ -108,10 +88,11 @@ export async function verifyPage(request: NextRequest): Promise<NextResponse> {
   return renderTemplate(
     request,
     "auth.html",
-    buildAuthTemplateContext(request, "verify", "/verify", {
+    {
+      mode: "verify",
       email: session.preAuth.email,
-      next_path: session.preAuth.redirectTo || "",
-    }),
+      form_action: "/verify",
+    },
     "verify",
   );
 }
@@ -141,12 +122,20 @@ export async function verifyAction(request: NextRequest): Promise<NextResponse> 
     return jsonResponse({ success: false, message: "Please login first", error_code: "login_required" }, 400);
   }
   const formData = await request.formData();
+  const otp = normalizeOtp(getString(formData, "otp"));
+  const otpValidationError = validateOtpCode(otp);
+  if (otpValidationError) {
+    if (getString(formData, "response_mode") === "json") {
+      return jsonResponse({ success: false, message: otpValidationError, error_code: "invalid_otp_format" }, 400);
+    }
+    return redirectWithFlash(request, "/verify", "error", otpValidationError);
+  }
   const { response, data } = await apiFetch("/api/auth/verify-otp/", {
     method: "POST",
     body: {
       challenge_id: session.preAuth.challengeId,
-      email: getString(formData, "email"),
-      otp: getString(formData, "otp"),
+      email: session.preAuth.email,
+      otp,
       purpose: session.preAuth.purpose,
     },
   });
@@ -164,8 +153,7 @@ export async function verifyAction(request: NextRequest): Promise<NextResponse> 
   if (!response.ok || !data.success) {
     return redirectWithFlash(request, "/verify", "error", String(data.message || "Incorrect OTP"));
   }
-  const nextPath = sanitizeNextUrl(session.preAuth.redirectTo || String(data.redirect || defaultPostAuthPath(data.user as SessionUser)));
-  const next = redirect(request, nextPath);
+  const next = redirect(request, String(data.redirect || "/"));
   persistAuth(next, String(data.token), data.user as SessionUser);
   applyPreferredLanguage(next, data.user as SessionUser);
   clearPreAuth(next);
@@ -175,55 +163,62 @@ export async function verifyAction(request: NextRequest): Promise<NextResponse> 
 }
 
 export async function registerPage(request: NextRequest): Promise<NextResponse> {
-  return renderTemplate(request, "auth.html", buildAuthTemplateContext(request, "register", "/register"), "register");
+  return renderTemplate(request, "auth.html", { mode: "register", form_action: "/register" }, "register");
 }
 
 export async function registerAction(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData();
+  const registerPayload = {
+    username: normalizeUsername(getString(formData, "username")),
+    email: normalizeEmail(getString(formData, "email")),
+    password: getString(formData, "password"),
+    role: getString(formData, "role") || "customer",
+    full_name: normalizeHumanName(getString(formData, "full_name")),
+    city: normalizeHumanName(getString(formData, "city")),
+    state: normalizeHumanName(getString(formData, "state")),
+    district: normalizeHumanName(getString(formData, "district")),
+    pincode: normalizePincode(getString(formData, "pincode")),
+  };
+  const registerValidationError = validateRegisterPayload(registerPayload);
+  if (registerValidationError) {
+    return redirectWithFlash(request, "/register", "error", registerValidationError);
+  }
   const { response, data } = await apiFetch("/api/auth/register/", {
     method: "POST",
-    body: {
-      username: getString(formData, "username"),
-      email: getString(formData, "email"),
-      password: getString(formData, "password"),
-      role: getString(formData, "role") || "customer",
-      full_name: getString(formData, "full_name"),
-      city: getString(formData, "city"),
-      state: getString(formData, "state"),
-      district: getString(formData, "district"),
-      pincode: getString(formData, "pincode"),
-    },
+    body: registerPayload,
   });
   if (!response.ok || !data.success) {
     return redirectWithFlash(request, "/register", "error", String(data.message || "Registration failed"));
   }
-  const nextPath = sanitizeNextUrl(getString(formData, "next"));
-  return redirectWithFlash(request, buildAuthHref("/login", nextPath), "success", String(data.message || "Registration successful! Please login."));
+  return redirectWithFlash(request, "/login", "success", String(data.message || "Registration successful! Please login."));
 }
 
 export async function forgotPasswordPage(request: NextRequest): Promise<NextResponse> {
-  return renderTemplate(request, "auth.html", buildAuthTemplateContext(request, "forgot_password", "/forgot_password"), "forgot_password");
+  return renderTemplate(request, "auth.html", { mode: "forgot_password", form_action: "/forgot_password" }, "forgot_password");
 }
 
 export async function forgotPasswordAction(request: NextRequest): Promise<NextResponse> {
   const formData = await request.formData();
+  const email = normalizeEmail(getString(formData, "email"));
+  const emailValidationError = validateEmailAddress(email);
+  if (emailValidationError) {
+    return redirectWithFlash(request, "/forgot_password", "error", emailValidationError);
+  }
   const { response, data } = await apiFetch("/api/auth/forgot-password/", {
     method: "POST",
     body: {
-      email: getString(formData, "email"),
+      email,
     },
   });
   if (!response.ok || !data.success) {
     return redirectWithFlash(request, "/forgot_password", "error", String(data.message || "Unable to start password reset"));
   }
-  const nextPath = sanitizeNextUrl(getString(formData, "next"));
-  const next = redirect(request, buildAuthHref("/reset_password/verify", nextPath));
+  const next = redirect(request, "/reset_password/verify");
   setResetAuth(next, {
     challengeId: String(data.challenge_id),
-    email: String(data.email || getString(formData, "email")),
+    email: String(data.email || email),
     purpose: String(data.purpose || "password_reset"),
     verified: false,
-    redirectTo: nextPath !== "/" ? nextPath : undefined,
   });
   return next;
 }
@@ -255,7 +250,7 @@ export async function resetVerifyPage(request: NextRequest): Promise<NextRespons
   return renderTemplate(
     request,
     "auth.html",
-    buildAuthTemplateContext(request, "reset_verify", "/reset_password/verify", { email: session.resetAuth.email, next_path: session.resetAuth.redirectTo || "" }),
+    { mode: "reset_verify", email: session.resetAuth.email, form_action: "/reset_password/verify" },
     "verify_reset_otp",
   );
 }
@@ -266,12 +261,20 @@ export async function resetVerifyAction(request: NextRequest): Promise<NextRespo
     return jsonResponse({ success: false, message: "Start the password reset flow first.", error_code: "password_reset_required" }, 400);
   }
   const formData = await request.formData();
+  const otp = normalizeOtp(getString(formData, "otp"));
+  const otpValidationError = validateOtpCode(otp);
+  if (otpValidationError) {
+    if (getString(formData, "response_mode") === "json") {
+      return jsonResponse({ success: false, message: otpValidationError, error_code: "invalid_otp_format" }, 400);
+    }
+    return redirectWithFlash(request, "/reset_password/verify", "error", otpValidationError);
+  }
   const { response, data } = await apiFetch("/api/auth/verify-otp/", {
     method: "POST",
     body: {
       challenge_id: session.resetAuth.challengeId,
-      email: getString(formData, "email"),
-      otp: getString(formData, "otp"),
+      email: session.resetAuth.email,
+      otp,
       purpose: session.resetAuth.purpose,
     },
   });
@@ -302,7 +305,7 @@ export async function resetPasswordPage(request: NextRequest): Promise<NextRespo
   return renderTemplate(
     request,
     "auth.html",
-    buildAuthTemplateContext(request, "reset_password", "/reset_password", { email: session.resetAuth.email, next_path: session.resetAuth.redirectTo || "" }),
+    { mode: "reset_password", email: session.resetAuth.email, form_action: "/reset_password" },
     "reset_password",
   );
 }
@@ -313,12 +316,19 @@ export async function resetPasswordAction(request: NextRequest): Promise<NextRes
     return redirectWithFlash(request, "/forgot_password", "error", "Complete OTP verification before setting a new password.");
   }
   const formData = await request.formData();
+  const passwordResetPayload = {
+    password: getString(formData, "password"),
+    confirm_password: getString(formData, "confirm_password"),
+  };
+  const passwordResetValidationError = validatePasswordResetPayload(passwordResetPayload);
+  if (passwordResetValidationError) {
+    return redirectWithFlash(request, "/reset_password", "error", passwordResetValidationError);
+  }
   const { response, data } = await apiFetch("/api/auth/reset-password/", {
     method: "POST",
     body: {
       challenge_id: session.resetAuth.challengeId,
-      password: getString(formData, "password"),
-      confirm_password: getString(formData, "confirm_password"),
+      ...passwordResetPayload,
     },
   });
   if (!response.ok || !data.success) {
@@ -359,7 +369,7 @@ export async function adminLoginAction(request: NextRequest): Promise<NextRespon
     if (response.ok && data.success) {
       setAdminAuth(next, {
         challengeId: String(data.challenge_id),
-        email: String(data.email || getString(formData, "email")),
+        email: String(data.email || email),
         purpose: String(data.purpose || "admin"),
       });
     }
