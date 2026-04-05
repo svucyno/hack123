@@ -19,18 +19,6 @@ export class MarketplaceController {
     return this.marketplaceService.listCrops(query);
   }
 
-  @UseGuards(TokenAuthGuard)
-  @Get('filters')
-  filters() {
-    return this.marketplaceService.marketplaceFilters();
-  }
-
-  @UseGuards(TokenAuthGuard)
-  @Get('categories/summary')
-  categorySummary() {
-    return this.marketplaceService.categorySummary();
-  }
-
   @Get('farmers/:farmerId/profile')
   farmerProfile(@Param('farmerId') farmerId: string) {
     return this.marketplaceService.farmerProfile(farmerId);
@@ -69,8 +57,7 @@ export class MarketplaceController {
     return this.marketplaceService.cropDetail(request.user!, cropId);
   }
 
-  @UseGuards(TokenAuthGuard, RolesGuard)
-  @Roles('farmer', 'admin')
+  @UseGuards(TokenAuthGuard)
   @Patch('farmer/crops/:cropId')
   @UseInterceptors(
     FileFieldsInterceptor(
@@ -90,8 +77,7 @@ export class MarketplaceController {
     return this.marketplaceService.updateCrop(request.user!, cropId, body, files || {});
   }
 
-  @UseGuards(TokenAuthGuard, RolesGuard)
-  @Roles('farmer', 'admin')
+  @UseGuards(TokenAuthGuard)
   @Delete('farmer/crops/:cropId')
   deleteCrop(@Req() request: AuthenticatedRequest, @Param('cropId') cropId: string) {
     return this.marketplaceService.deleteCrop(request.user!, cropId);

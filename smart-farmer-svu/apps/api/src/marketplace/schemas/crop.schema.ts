@@ -16,12 +16,6 @@ export class Crop {
   @Prop({ default: '' })
   category!: string;
 
-  @Prop({ default: '', index: true })
-  listing_code!: string;
-
-  @Prop({ type: [String], default: [] })
-  search_terms!: string[];
-
   @Prop({ type: Number, required: true, min: 0 })
   quantity!: number;
 
@@ -96,5 +90,3 @@ export type CropDocument = HydratedDocument<Crop>;
 export const CropSchema = SchemaFactory.createForClass(Crop);
 CropSchema.index({ farmer: 1, created_at: -1 });
 CropSchema.index({ name: 1, category: 1, state: 1, district: 1 });
-CropSchema.index({ category: 1, organic: 1, same_day_available: 1, stock_status: 1, created_at: -1 });
-CropSchema.index({ search_terms: 1 });
