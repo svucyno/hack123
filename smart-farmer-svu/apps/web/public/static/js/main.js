@@ -1217,34 +1217,3 @@ document.addEventListener("DOMContentLoaded", () => {
         revealItems.forEach((item) => item.classList.add("is-visible"));
     }
 });
-
-document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll("[data-auto-submit-filters]").forEach((form) => {
-        let submitTimer = null;
-        form.querySelectorAll("select").forEach((field) => {
-            field.addEventListener("change", () => {
-                if (submitTimer) {
-                    window.clearTimeout(submitTimer);
-                }
-                submitTimer = window.setTimeout(() => form.submit(), 120);
-            });
-        });
-    });
-
-    document.querySelectorAll("[data-order-form]").forEach((form) => {
-        const quantityInput = form.querySelector("[data-order-quantity]");
-        const totalLabel = form.querySelector("[data-order-total]");
-        if (!quantityInput || !totalLabel) {
-            return;
-        }
-
-        const renderTotal = () => {
-            const unitPrice = Number.parseFloat(quantityInput.dataset.unitPrice || "0");
-            const quantity = Math.max(1, Number.parseFloat(quantityInput.value || "1") || 1);
-            totalLabel.textContent = `Rs.${(unitPrice * quantity).toFixed(2)}`;
-        };
-
-        quantityInput.addEventListener("input", renderTotal);
-        renderTotal();
-    });
-});
