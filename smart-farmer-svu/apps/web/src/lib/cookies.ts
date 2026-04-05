@@ -26,7 +26,6 @@ export type PendingFlow = {
   email: string;
   purpose: string;
   verified?: boolean;
-  redirectTo?: string;
 };
 
 function encodeJson(value: unknown): string {

@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { apiFetch } from "@/lib/api";
-import { buildOrderWorkspace, normalizeOrderWorkspaceFilters } from "@/lib/commerce-view";
 import { redirectWithFlash } from "@/lib/http";
 import { renderTemplate } from "@/lib/template";
 
@@ -32,19 +31,12 @@ export async function myOrdersPage(request: NextRequest): Promise<NextResponse> 
     return redirectWithFlash(request, "/marketplace", "error", String(data.message || "Unable to load orders"));
   }
 
-  const filters = normalizeOrderWorkspaceFilters(request.nextUrl.searchParams);
-  const workspace = buildOrderWorkspace(
-    asArray(data.active_orders),
-    asArray(data.order_history),
-    asRecord(data.summary),
-    filters,
-  );
-
   return renderTemplate(
     request,
     "customer_orders.html",
     {
-      ...workspace,
+      active_orders: asArray(data.active_orders),
+      order_history: asArray(data.order_history),
       summary: asRecord(data.summary),
     },
     "my_orders",
@@ -68,7 +60,7 @@ export async function cancelOrderAction(request: NextRequest, orderId: string): 
   }
   return redirectWithFlash(
     request,
-    "/my_orders?tab=history",
+    "/my_orders",
     response.ok && data.success ? "success" : "error",
     String(data.message || (response.ok ? "Order updated" : "Unable to cancel order")),
   );
@@ -125,7 +117,7 @@ export async function confirmPaymentAction(request: NextRequest): Promise<NextRe
   }
   return redirectWithFlash(
     request,
-    "/my_orders?tab=payments",
+    "/my_orders",
     response.ok && data.success ? "success" : "error",
     String(data.message || (response.ok ? "Payment successful" : "Unable to confirm payment")),
   );
@@ -180,7 +172,7 @@ export async function submitReviewAction(request: NextRequest): Promise<NextResp
   }
   return redirectWithFlash(
     request,
-    "/my_orders?tab=history",
+    "/my_orders",
     response.ok && data.success ? "success" : "error",
     String(data.message || (response.ok ? "Review submitted" : "Unable to submit review")),
   );

@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { apiFetch } from "@/lib/api";
 import { redirectWithFlash } from "@/lib/http";
 import { renderTemplate } from "@/lib/template";
-import { buildFarmerDashboardView } from "@/lib/farmer-dashboard";
 
 import { authFailureRedirect, requireSession } from "@/server/session";
 import { copyFormData, getString } from "@/server/utils";
@@ -32,13 +31,6 @@ export async function farmerDashboardPage(request: NextRequest): Promise<NextRes
     return redirectWithFlash(request, "/", "error", String(data.message || "Unable to load farmer dashboard"));
   }
 
-  const dashboardView = buildFarmerDashboardView(
-    request,
-    asArray(data.crops),
-    asArray(data.orders),
-    asRecord(data.metrics),
-  );
-
   return renderTemplate(
     request,
     "farmer.html",
@@ -50,7 +42,6 @@ export async function farmerDashboardPage(request: NextRequest): Promise<NextRes
       top_selling_crops: asArray(data.top_selling_crops),
       demand_hotspots: asArray(data.demand_hotspots),
       smart_alerts: asArray(data.smart_alerts),
-      ...dashboardView,
     },
     "farmer_dashboard",
   );
@@ -77,7 +68,7 @@ export async function addCropAction(request: NextRequest): Promise<NextResponse>
   }
   return redirectWithFlash(
     request,
-    `/farmer/dashboard${request.nextUrl.search}`,
+    "/farmer/dashboard",
     response.ok && data.success ? "success" : "error",
     String(data.message || (response.ok ? "Crop added successfully!" : "Unable to add crop")),
   );

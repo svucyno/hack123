@@ -25,11 +25,7 @@ export function redirectWithFlash(
 }
 
 export function unauthorizedRedirect(request: NextRequest, loginPath = "/login"): NextResponse {
-  const requestedPath = sanitizeNextUrl(`${request.nextUrl.pathname}${request.nextUrl.search}`);
-  const loginTarget = requestedPath && requestedPath !== "/"
-    ? `${loginPath}?next=${encodeURIComponent(requestedPath)}`
-    : loginPath;
-  const response = redirect(request, loginTarget);
+  const response = redirect(request, loginPath);
   clearAuth(response);
   setFlash(response, "error", "Please login first");
   return response;
