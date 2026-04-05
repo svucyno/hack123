@@ -1,0 +1,25 @@
+{
+  "name": "smart-farmer-svu",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "apps/expo"
+  ],
+  "scripts": {
+    "predev:api": "node scripts/dev/free-port.js 4000",
+    "dev:api": "npm --workspace apps/api run start:dev",
+    "build:api": "npm --workspace apps/api run build",
+    "typecheck:api": "npm --workspace apps/api run typecheck",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "typecheck:web": "npm --workspace apps/web run typecheck",
+    "dev:expo": "npm --workspace apps/expo run start",
+    "dev:expo:clear": "npm --workspace apps/expo run start:clear",
+    "dev:expo:tunnel": "npm --workspace apps/expo run start:tunnel",
+    "typecheck:expo": "npm --workspace apps/expo run typecheck"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
