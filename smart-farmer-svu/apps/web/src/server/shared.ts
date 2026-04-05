@@ -2,9 +2,9 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { COOKIE_NAMES } from "@/lib/cookies";
-import { getSessionState } from "@/lib/auth";
 import { redirect, sanitizeNextUrl } from "@/lib/http";
 import { normalizeLanguage } from "@/lib/language";
+import { loginPage } from "@/server/auth";
 
 function getFallbackNextPath(request: NextRequest): string {
   const referer = request.headers.get("referer");
@@ -20,17 +20,7 @@ function getFallbackNextPath(request: NextRequest): string {
 }
 
 export async function home(request: NextRequest): Promise<NextResponse> {
-  const session = getSessionState(request);
-  if (session.user) {
-    if (session.user.role === "farmer") {
-      return redirect(request, "/farmer/dashboard");
-    }
-    if (session.user.role === "admin") {
-      return redirect(request, "/admin/dashboard");
-    }
-    return redirect(request, "/marketplace");
-  }
-  return redirect(request, "/login");
+  return loginPage(request);
 }
 
 export async function setLanguage(request: NextRequest): Promise<NextResponse> {
