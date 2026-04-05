@@ -1216,36 +1216,35 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
         revealItems.forEach((item) => item.classList.add("is-visible"));
     }
+});
 
-
-    const farmerFilterForm = document.querySelector('.farmer-filter-card form, .farmer-filter-card');
-    if (document.body.classList.contains('endpoint-farmer_dashboard') && farmerFilterForm) {
-        const dashboardSelects = farmerFilterForm.querySelectorAll('select');
-        dashboardSelects.forEach((select) => {
-            select.addEventListener('change', () => {
-                if (typeof farmerFilterForm.requestSubmit === 'function') {
-                    farmerFilterForm.requestSubmit();
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("[data-auto-submit-filters]").forEach((form) => {
+        let submitTimer = null;
+        form.querySelectorAll("select").forEach((field) => {
+            field.addEventListener("change", () => {
+                if (submitTimer) {
+                    window.clearTimeout(submitTimer);
                 }
+                submitTimer = window.setTimeout(() => form.submit(), 120);
             });
         });
+    });
 
-        const cropQueryInput = farmerFilterForm.querySelector('input[name="crop_query"]');
-        if (cropQueryInput) {
-            cropQueryInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' && typeof farmerFilterForm.requestSubmit === 'function') {
-                    event.preventDefault();
-                    farmerFilterForm.requestSubmit();
-                }
-            });
+    document.querySelectorAll("[data-order-form]").forEach((form) => {
+        const quantityInput = form.querySelector("[data-order-quantity]");
+        const totalLabel = form.querySelector("[data-order-total]");
+        if (!quantityInput || !totalLabel) {
+            return;
         }
-    }
 
-    if (document.body.classList.contains('endpoint-farmer_profile')) {
-        const reviewCards = document.querySelectorAll('.review-quote-card');
-        reviewCards.forEach((card, index) => {
-            card.style.transitionDelay = `${Math.min(index * 55, 220)}ms`;
-            card.classList.add('reveal');
-        });
-    }
+        const renderTotal = () => {
+            const unitPrice = Number.parseFloat(quantityInput.dataset.unitPrice || "0");
+            const quantity = Math.max(1, Number.parseFloat(quantityInput.value || "1") || 1);
+            totalLabel.textContent = `Rs.${(unitPrice * quantity).toFixed(2)}`;
+        };
 
+        quantityInput.addEventListener("input", renderTotal);
+        renderTotal();
+    });
 });
