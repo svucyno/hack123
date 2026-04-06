@@ -35,11 +35,10 @@ function applyPreferredLanguage(response: NextResponse, user?: SessionUser | nul
 
 export async function loginPage(request: NextRequest): Promise<NextResponse> {
   const session = getSessionState(request);
-  const response = renderTemplate(request, "auth.html", { mode: "login", form_action: "/login" }, "login");
-  if (session.user || session.token) {
-    clearAuth(response);
+  if (session.user) {
+    return redirect(request, "/");
   }
-  return response;
+  return renderTemplate(request, "auth.html", { mode: "login", form_action: "/login" }, "login");
 }
 
 export async function loginAction(request: NextRequest): Promise<NextResponse> {

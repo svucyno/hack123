@@ -43,26 +43,8 @@ const env = new nunjucks.Environment(
 );
 
 const safeJson = (value: unknown) => new nunjucks.runtime.SafeString(JSON.stringify(value));
-const asTemplateString = (value: unknown) => {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  return String(value);
-};
 
 env.addFilter("tojson", safeJson);
-env.addFilter("upper", (value) => asTemplateString(value).toUpperCase());
-env.addFilter("capitalize", (value) => {
-  const stringValue = asTemplateString(value);
-  return stringValue ? stringValue.charAt(0).toUpperCase() + stringValue.slice(1) : "";
-});
-env.addFilter("title", (value) =>
-  asTemplateString(value)
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" "),
-);
 env.addFilter("list", (value) => {
   if (Array.isArray(value)) {
     return value;
@@ -207,24 +189,11 @@ function createTranslator(language: string) {
 }
 
 function createStatusTranslator(t: ReturnType<typeof createTranslator>) {
-  return (value?: unknown) => {
-    if (value === null || value === undefined || value === "") {
-      return "";
-    }
-    const stringValue = String(value);
-    return t(STATUS_TRANSLATION_KEYS[stringValue] || "", stringValue);
-  };
+  return (value?: string) => (value ? t(STATUS_TRANSLATION_KEYS[value] || "", value) : value || "");
 }
 
 function createRoleTranslator(t: ReturnType<typeof createTranslator>) {
-  return (value?: unknown) => {
-    if (value === null || value === undefined || value === "") {
-      return "";
-    }
-    const stringValue = String(value);
-    const fallback = stringValue.charAt(0).toUpperCase() + stringValue.slice(1);
-    return t(ROLE_TRANSLATION_KEYS[stringValue] || "", fallback);
-  };
+  return (value?: string) => (value ? t(ROLE_TRANSLATION_KEYS[value] || "", value.charAt(0).toUpperCase() + value.slice(1)) : value || "");
 }
 
 class SessionWrapper {

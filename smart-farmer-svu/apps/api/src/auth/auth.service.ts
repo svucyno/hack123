@@ -93,6 +93,79 @@ export class AuthService implements OnModuleInit {
     });
   }
 
+  async startEmailVerification(body: Record<string, unknown>) {
+    const email = this.normalizeEmail(body.email);
+    if (!email) {
+      fail('Enter your email first.', 'email_required');
+    }
+
+    const purpose = this.parsePurpose(body.purpose, 'email_verification');
+    if (purpose === 'signup_email_verification') {
+      if (this.isBlockedEmailDomain(email)) {
+        fail('Use a real email inbox. Example or test domains cannot receive OTP emails.', 'invalid_email_domain');
+      }
+
+      const existingUser = await this.userModel.findOne({ email });
+      if (existingUser) {
+        fail('An account already exists with this email.', 'already_exists', HttpStatus.CONFLICT);
+      }
+
+      const challenge = await this.createEmailChallenge(email, 'signup_email_verification');
+      const extra = await this.issueOtp(challenge);
+
+      return ok('Signup email verification code sent.', {
+        challenge_id: asIdString(challenge._id),
+        email: challenge.email,
+        purpose: challenge.purpose,
+        ...extra,
+      });
+    }
+
+    const user: any = await this.userModel.findOne({ email });
+    if (!user) {
+      fail('No email found for this address.', 'email_not_found', HttpStatus.NOT_FOUND, { otp: null });
+    }
+
+    const challenge = await this.createChallenge(user, 'email_verification');
+    const extra = await this.issueOtp(challenge);
+
+    return ok('Email verification code sent.', {
+      challenge_id: asIdString(challenge._id),
+      email: challenge.email,
+      purpose: challenge.purpose,
+      ...extra,
+    });
+  }
+
+  async loginAfterEmailVerification(body: Record<string, unknown>) {
+    const email = this.normalizeEmail(body.email);
+    const password = String(body.password || '');
+    const challenge: any = await this.getChallenge(String(body.challenge_id || ''), 'email_verification');
+
+    if (!challenge.verified_at) {
+      fail('Verify your email before login.', 'email_not_verified');
+    }
+    if (email !== this.normalizeEmail(challenge.email)) {
+      fail('Email verification is invalid. Please verify again.', 'email_verification_mismatch');
+    }
+
+    const user = challenge.user as any;
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      fail('Incorrect password.', 'invalid_credentials', HttpStatus.UNAUTHORIZED);
+    }
+
+    const token = await this.issueToken(user);
+    challenge.is_active = false;
+    await challenge.save();
+
+    const redirect = user.role === 'farmer' ? '/farmer/dashboard' : user.role === 'admin' ? '/admin/dashboard' : '/my_orders';
+    return ok('Login successful.', {
+      token,
+      user: serializeUser(user),
+      redirect,
+    });
+  }
+
   async requestOtp(body: Record<string, unknown>) {
     const purpose = this.parsePurpose(body.purpose, 'login');
     const challenge: any = await this.getChallenge(String(body.challenge_id || ''), purpose);
@@ -108,13 +181,26 @@ export class AuthService implements OnModuleInit {
   async verifyOtp(body: Record<string, unknown>) {
     const purpose = this.parsePurpose(body.purpose, 'login');
     const challenge: any = await this.getChallenge(String(body.challenge_id || ''), purpose);
-    await this.verifyChallengeOtp(challenge, body.email, body.otp, purpose !== 'password_reset');
+    await this.verifyChallengeOtp(
+      challenge,
+      body.email,
+      body.otp,
+      purpose !== 'password_reset' && purpose !== 'email_verification',
+    );
 
     if (purpose === 'password_reset') {
       return ok('OTP verified successfully.', {
         challenge_id: asIdString(challenge._id),
         verified: true,
         redirect: '/reset_password',
+      });
+    }
+
+    if (purpose === 'email_verification' || purpose === 'signup_email_verification') {
+      return ok('Email verified successfully.', {
+        challenge_id: asIdString(challenge._id),
+        email: challenge.email,
+        verified: true,
       });
     }
 
@@ -293,6 +379,18 @@ export class AuthService implements OnModuleInit {
     });
   }
 
+  private async createEmailChallenge(email: string, purpose: ChallengePurpose, metadata: Record<string, unknown> = {}) {
+    const normalizedEmail = this.normalizeEmail(email);
+    await this.authChallengeModel.updateMany({ email: normalizedEmail, purpose, is_active: true }, { is_active: false });
+    return this.authChallengeModel.create({
+      user: null,
+      email: normalizedEmail,
+      purpose,
+      credential_verified: true,
+      metadata,
+    });
+  }
+
   private async getChallenge(challengeId: string, purpose: ChallengePurpose) {
     if (!isValidObjectId(challengeId)) {
       fail('Challenge not found or expired.', 'challenge_not_found', HttpStatus.NOT_FOUND);
@@ -390,6 +488,12 @@ export class AuthService implements OnModuleInit {
   private purposeLabel(purpose: ChallengePurpose): string {
     if (purpose === 'password_reset') {
       return 'password reset';
+    }
+    if (purpose === 'email_verification') {
+      return 'email verification';
+    }
+    if (purpose === 'signup_email_verification') {
+      return 'signup email verification';
     }
     if (purpose === 'admin') {
       return 'admin login';
