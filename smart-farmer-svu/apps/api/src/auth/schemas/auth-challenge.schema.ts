@@ -9,8 +9,8 @@ import { CHALLENGE_PURPOSES, type ChallengePurpose } from '../../common/constant
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 })
 export class AuthChallenge {
-  @Prop({ type: SchemaTypes.ObjectId, required: true, ref: 'User' })
-  user!: Types.ObjectId;
+  @Prop({ type: SchemaTypes.ObjectId, required: false, ref: 'User', default: null })
+  user!: Types.ObjectId | null;
 
   @Prop({ required: true, lowercase: true, trim: true })
   email!: string;
@@ -46,4 +46,5 @@ export class AuthChallenge {
 export type AuthChallengeDocument = HydratedDocument<AuthChallenge>;
 export const AuthChallengeSchema = SchemaFactory.createForClass(AuthChallenge);
 AuthChallengeSchema.index({ user: 1, purpose: 1, is_active: 1 });
+AuthChallengeSchema.index({ email: 1, purpose: 1, is_active: 1 });
 AuthChallengeSchema.index({ created_at: -1 });

@@ -34,6 +34,9 @@ declare module 'react-native' {
   export const Alert: any;
   export const Image: any;
   export const ImageBackground: any;
+  export const KeyboardAvoidingView: any;
+  export const Modal: any;
+  export const Platform: { OS?: string; select(config: Record<string, any>): any };
   export const Pressable: any;
   export const ScrollView: any;
   export const StatusBar: any;
@@ -49,7 +52,9 @@ declare module 'react-native' {
 }
 
 declare module '@expo/vector-icons' {
+  export const Feather: any;
   export const FontAwesome6: any;
+  export const MaterialCommunityIcons: any;
 }
 
 declare module 'react-native-safe-area-context' {

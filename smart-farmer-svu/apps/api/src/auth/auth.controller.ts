@@ -21,6 +21,16 @@ export class AuthController {
     return this.authService.login(body);
   }
 
+  @Post('email-verification/start')
+  startEmailVerification(@Body() body: Record<string, unknown>) {
+    return this.authService.startEmailVerification(body);
+  }
+
+  @Post('login-after-email-verification')
+  loginAfterEmailVerification(@Body() body: Record<string, unknown>) {
+    return this.authService.loginAfterEmailVerification(body);
+  }
+
   @Post('request-otp')
   requestOtp(@Body() body: Record<string, unknown>) {
     return this.authService.requestOtp(body);

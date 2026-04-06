@@ -7,11 +7,11 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash-light.jpeg",
+      "image": "./assets/splash-light-native.png",
       "resizeMode": "cover",
       "backgroundColor": "#f7f6f1",
       "dark": {
-        "image": "./assets/splash-dark.jpeg",
+        "image": "./assets/splash-dark-native.png",
         "backgroundColor": "#102116"
       }
     },

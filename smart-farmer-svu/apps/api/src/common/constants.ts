@@ -1,7 +1,7 @@
 export const USER_ROLES = ['admin', 'farmer', 'customer'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-export const CHALLENGE_PURPOSES = ['login', 'password_reset', 'admin'] as const;
+export const CHALLENGE_PURPOSES = ['login', 'password_reset', 'admin', 'email_verification', 'signup_email_verification'] as const;
 export type ChallengePurpose = (typeof CHALLENGE_PURPOSES)[number];
 
 export const MARKETPLACE_CATEGORIES = [

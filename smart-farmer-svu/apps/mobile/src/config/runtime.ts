@@ -33,6 +33,41 @@ function sanitizeManualUrl(candidate: string): string {
   return `http://${trimmed}`;
 }
 
+function normalizeApiUrl(candidate: string): string {
+  const sanitized = sanitizeManualUrl(candidate);
+  if (!sanitized) {
+    return "";
+  }
+
+  try {
+    const url = new URL(sanitized);
+    if (!url.port || url.port === "3000") {
+      url.port = "8000";
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return sanitized;
+  }
+}
+
+export function resolveApiUrl(): string {
+  const manualUrl = normalizeApiUrl(process.env.EXPO_PUBLIC_API_URL || "");
+  if (manualUrl) {
+    return manualUrl;
+  }
+
+  const host =
+    extractHost((Constants.expoConfig as ExpoConfigWithHost | null)?.hostUri) ||
+    extractHost((Constants.expoGoConfig as ExpoGoConfigWithDebuggerHost | null)?.debuggerHost) ||
+    extractHost((Constants.platform as ExpoConfigWithHost | null)?.hostUri);
+
+  if (host) {
+    return `http://${host}:8000`;
+  }
+
+  return "http://localhost:8000";
+}
+
 export function resolveWebUrl(): string {
   const manualUrl = sanitizeManualUrl(process.env.EXPO_PUBLIC_WEB_URL || "");
   if (manualUrl) {
@@ -49,24 +84,6 @@ export function resolveWebUrl(): string {
   }
 
   return "http://localhost:3000";
-}
-
-export function resolveApiUrl(): string {
-  const manualUrl = sanitizeManualUrl(process.env.EXPO_PUBLIC_API_URL || "");
-  if (manualUrl) {
-    return manualUrl;
-  }
-
-  const host =
-    extractHost((Constants.expoConfig as ExpoConfigWithHost | null)?.hostUri) ||
-    extractHost((Constants.expoGoConfig as ExpoGoConfigWithDebuggerHost | null)?.debuggerHost) ||
-    extractHost((Constants.platform as ExpoConfigWithHost | null)?.hostUri);
-
-  if (host) {
-    return `http://${host}:8000`;
-  }
-
-  return "http://localhost:8000";
 }
 
 export function buildHealthUrl(webUrl: string): string {
